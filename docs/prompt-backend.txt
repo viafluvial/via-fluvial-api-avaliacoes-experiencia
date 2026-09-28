@@ -1,0 +1,295 @@
+PROMPT ESPECIALIZADO - BACKEND DA API DE AVALIACOES E EXPERIENCIA
+
+PAPEL
+
+Voce e um arquiteto e engenheiro senior Java responsavel por implementar, de ponta a ponta, o backend do microsservico `via-fluvial-api-avaliacoes-experiencia`. Nao entregue apenas plano, exemplos ou pseudocodigo: implemente codigo funcional, migrations, contratos, testes, documentacao e operacao local, validando tudo ao final.
+
+DOCUMENTOS OBRIGATORIOS
+
+Antes de qualquer alteracao, leia integralmente e trate como contrato:
+
+1. `docs/avaliacoes-experiencia.txt`
+2. `docs/padroes-projeto-java-spring-boot.txt`
+3. `docs/contrato-operacional-para-dockerfile-docker-compose-makefile.txt`
+4. `docs/contrato-operacional-para-migrations-seeds.txt`
+5. `docs/contrato-operacional-para-swagger-openapi.txt`
+6. `docs/prompt.txt`
+7. `docs/prompt-integracoes-plataforma.txt`
+
+Em conflito, prevalecem: seguranca e LGPD; regras funcionais deste prompt; contratos operacionais especializados; padroes gerais. Registre qualquer conflito e a decisao tomada.
+
+CORRECOES DE NOMENCLATURA OBRIGATORIAS
+
+- Repositorio: `via-fluvial-api-avaliacoes-experiencia`.
+- Artifact e service name: `api-avaliacoes-experiencia`.
+- Slug: `avaliacoes-experiencia`.
+- Pacote Java: `br.com.viafluvial.avaliacoesexperiencia`. O texto `br.com.viafluvial.avaliacoes-experiencia` e invalido em Java e nao deve ser usado.
+- API host local: porta externa `18021`, interna `8080`.
+- Banco: `db-avaliacoes-experiencia`.
+- Schema: `sc-avaliacoes-experiencia`.
+- Usuario local dedicado quando o compose do servico usar banco proprio: `avaliacoes-experiencia_app`.
+- Base path final: `/api/v1`, configurado uma unica vez em `server.servlet.context-path`.
+- Paths do OpenAPI e controllers nao devem repetir `/api/v1`.
+
+OBJETIVO DO DOMINIO
+
+Implementar o bounded context de Avaliacoes e Experiencia para coletar feedback verificado pos-viagem sobre:
+
+- experiencia geral com a plataforma;
+- barqueiro;
+- embarcacao;
+- trajeto/viagem;
+- embarque e organizacao;
+- atendimento e suporte;
+- sugestoes, elogios e reclamacoes;
+- NPS/recomendacao;
+- moderacao, denuncia, contestacao e resposta do barqueiro;
+- agregados confiaveis de satisfacao e reputacao.
+
+Nao implementar entidades internas de Viagens, Reservas, Ingressos, Perfis, Notificacoes, Auditoria, Compliance, Suporte ou Relatorios. Esses dominios devem ser acessados apenas por ports out e DTOs de integracao.
+
+DESCOBERTA OBRIGATORIA ANTES DA IMPLEMENTACAO
+
+Inspecione o codigo real dos seguintes repositorios antes de definir contratos:
+
+- `via-fluvial-api-viagens`;
+- `via-fluvial-api-reservas`;
+- `via-fluvial-api-venda-ingressos`;
+- `via-fluvial-api-perfis-usuarios`;
+- `via-fluvial-api-notificacoes`;
+- `via-fluvial-api-ticket-suporte` e `via-fluvial-api-suporte`;
+- `via-fluvial-api-auditoria`;
+- `via-fluvial-api-compliance`;
+- `via-fluvial-api-relatorios`.
+
+Use endpoints, autenticacao, headers, eventos e DTOs que realmente existam. Nao invente uma URL como se estivesse pronta. Quando faltar um contrato indispensavel, documente-o e implemente a menor extensao no microsservico proprietario por meio do prompt de integracoes.
+
+REGRAS FUNCIONAIS
+
+Elegibilidade:
+
+1. Apenas passageiro autenticado pode criar sua propria avaliacao.
+2. A viagem deve existir e estar `COMPLETED`.
+3. O passageiro deve estar associado a reserva valida da viagem.
+4. Deve haver evidencia de participacao: preferencialmente bilhete `EMBARKED`/`embarkedAt`; use check-in confirmado apenas se o fluxo real nao possuir embarque para aquele cenario e documente a regra.
+5. Uma unica avaliacao ativa por `passengerId + tripId`.
+6. Barqueiro nao pode avaliar a si proprio por esse fluxo.
+7. O backend deriva `passengerId`/`userId` do principal autenticado; nunca confie em IDs de autor enviados livremente pelo cliente.
+8. O backend resolve e salva referencias da viagem (`boatmanId`, `vesselId`, `routeId`, `bookingId`, `ticketId`) a partir de fontes autoritativas.
+9. Permitir avaliacao por janela configuravel apos conclusao, com default de 30 dias.
+10. Operacoes repetidas devem ser idempotentes, usando constraint unica e, para comandos externos, idempotency key/event id.
+
+Notas e perguntas:
+
+- Escala das categorias: inteiro de 1 a 5.
+- Nota geral obrigatoria.
+- Categorias opcionais configuradas no questionario: plataforma, barqueiro, embarcacao, trajeto, embarque e atendimento.
+- NPS opcional de 0 a 10.
+- Comentario opcional, com limite configuravel e default maximo de 1000 caracteres.
+- Tipo de manifestacao: `COMPLIMENT`, `SUGGESTION`, `COMPLAINT` ou `SAFETY_REPORT`.
+- Tags opcionais devem vir de catalogo controlado, nao de texto arbitrario.
+- Notas 1 ou 2 em seguranca devem oferecer/acionar escalonamento para suporte; nao tratar incidente grave apenas como review.
+
+Ciclo de vida sugerido:
+
+- `DRAFT` apenas se houver necessidade real de salvamento parcial no frontend;
+- `SUBMITTED`;
+- `UNDER_REVIEW`;
+- `PUBLISHED`;
+- `REJECTED`;
+- `CONTESTED`;
+- `ANONYMIZED`;
+- `DELETED` somente como estado logico quando exigido; preservar trilha auditavel sem expor PII.
+
+Moderacao e publicacao:
+
+- Notas estruturadas podem alimentar agregados depois das validacoes antifraude basicas.
+- Comentarios publicos somente em `PUBLISHED`.
+- Filtrar ou mascarar CPF, telefone, e-mail, endereco e outros dados pessoais no texto.
+- Conteudo com indicios de ameaca, assedio, discriminacao, fraude ou risco de seguranca deve ir para revisao e/ou suporte.
+- Moderacao deve registrar motivo, ator e timestamps.
+- Barqueiro pode responder uma unica vez a comentario publicado e pode contestar; nao recebe identidade privada do passageiro.
+- Passageiro pode escolher exibicao publica anonima.
+- Exclusao/LGPD deve anonimizar conteudo e autor quando legalmente aplicavel, preservando metadados minimos e trilha de auditoria.
+
+Reputacao e agregados:
+
+- Calcular media geral, medias por categoria, distribuicao 1..5, NPS, total verificado e tendencias por periodo.
+- Nao duplicar fonte da verdade: avaliacoes individuais e agregados pertencem a este servico. `perfis-usuarios` pode receber snapshot de rating para leitura rapida, com evento idempotente e reconciliacao.
+- Exibir selo `verifiedTrip` apenas quando elegibilidade estiver comprovada.
+- Definir volume minimo configuravel antes de expor comparacoes publicas.
+
+MODELO DE DOMINIO MINIMO
+
+Modele com nomes coerentes em ingles ou portugues, sem mistura aleatoria. Sugestao conceitual, ajustavel apos TDD:
+
+- `ExperienceEvaluation` como aggregate root;
+- `EvaluationScore`/`Score` como value object 1..5;
+- `NpsScore` como value object 0..10;
+- `EvaluationDimension`;
+- `EvaluationStatus`;
+- `ManifestationType`;
+- `ModerationDecision`/historico de moderacao;
+- `BoatmanResponse`;
+- `EvaluationContest`;
+- `AbuseReport`;
+- `EvaluationTag`/catalogo;
+- `EligibilityEvidence` como snapshot minimo sem copiar entidades externas;
+- domain events para criacao, submissao, publicacao, rejeicao, contestacao, resposta, denuncia, anonimizacao e atualizacao de agregado.
+
+Persistir tabelas separadas quando houver ciclos de vida distintos. Nao guardar listas importantes apenas como JSON se isso impedir constraints, consultas e auditoria.
+
+CONTRATO REST API-FIRST
+
+Crie primeiro `src/main/resources/static/openapi/openapi.yaml` em OpenAPI 3.1 e gere interfaces/DTOs via OpenAPI Generator. Os paths abaixo sao o conjunto minimo; ajuste nomenclatura apenas para manter consistencia com o codigo real:
+
+Passageiro:
+
+- `GET /avaliacoes-experiencia/elegibilidade/viagens/{tripId}`;
+- `POST /avaliacoes-experiencia/avaliacoes`;
+- `GET /avaliacoes-experiencia/avaliacoes/minhas` paginado e filtravel;
+- `GET /avaliacoes-experiencia/avaliacoes/{evaluationId}`;
+- `PATCH /avaliacoes-experiencia/avaliacoes/{evaluationId}` dentro da janela permitida;
+- `POST /avaliacoes-experiencia/avaliacoes/{evaluationId}/denuncias` quando aplicavel;
+- endpoint de anonimizar/excluir conforme politica LGPD e autorizacao.
+
+Barqueiro/GESTOR:
+
+- `GET /avaliacoes-experiencia/barqueiros/me/resumo`;
+- `GET /avaliacoes-experiencia/barqueiros/me/avaliacoes` apenas publicadas e autorizadas;
+- `POST /avaliacoes-experiencia/avaliacoes/{evaluationId}/resposta`;
+- `POST /avaliacoes-experiencia/avaliacoes/{evaluationId}/contestacoes`;
+- acompanhar status da propria contestacao.
+
+Publico/uso interno:
+
+- `GET /avaliacoes-experiencia/barqueiros/{boatmanId}/resumo` sem PII;
+- listagem publica de comentarios apenas se aprovada pelo produto e com moderacao;
+- endpoint interno idempotente/event consumer para conclusao de viagem somente se o padrao real da plataforma exigir REST; prefira outbox/evento quando existente.
+
+Administracao/moderacao:
+
+- `GET /avaliacoes-experiencia/admin/avaliacoes` paginado, filtravel e ordenavel;
+- `GET /avaliacoes-experiencia/admin/avaliacoes/{evaluationId}`;
+- `POST /avaliacoes-experiencia/admin/avaliacoes/{evaluationId}/aprovar`;
+- `POST /avaliacoes-experiencia/admin/avaliacoes/{evaluationId}/rejeitar`;
+- `POST /avaliacoes-experiencia/admin/contestacoes/{contestId}/resolver`;
+- `GET /avaliacoes-experiencia/admin/indicadores`;
+- endpoints internos para reconciliacao/reprocessamento protegidos por role de servico/admin.
+
+Todos os endpoints devem ter operationId, tags, descricoes, exemplos, constraints, paginacao, erros RFC 7807 e security explicita conforme o contrato Swagger/OpenAPI.
+
+RBAC E SEGURANCA
+
+- `PASSAGEIRO`: elegibilidade, criar/consultar/editar a propria avaliacao e exercer direitos LGPD.
+- `GESTOR`: consultar apenas agregados e comentarios publicados relativos ao proprio `boatmanId`, responder e contestar.
+- `ADMINISTRADOR`: moderacao, catalogos, politicas e indicadores.
+- `SUPORTE`: consultar contexto necessario para tratar incidente/contestacao, sem poder alterar nota arbitrariamente.
+- `AUDITOR`: leitura auditavel, sem moderacao.
+- `SERVICE`: integracoes internas estritamente necessarias.
+- HML/PRD: OAuth2 Resource Server JWT obrigatorio, stateless, 401 para ausente/invalido e 403 para role insuficiente.
+- DSV: principal mock somente por profile/config explicita; nunca deixar modo dev como default silencioso em PRD.
+- Propagar `X-Correlation-Id` em todas as chamadas externas.
+- Nao logar token, comentario completo, nome, CPF, telefone ou e-mail.
+
+ARQUITETURA
+
+Siga DDD + Clean Architecture + Ports and Adapters:
+
+- `domain`: sem Spring/JPA;
+- `application/port/in`: use cases pequenos;
+- `application/port/out`: repositorios, elegibilidade, viagem, reserva, ingresso, perfis, notificacoes, auditoria/compliance, eventos;
+- `application/service`: orquestracao e transacoes curtas;
+- `adapters/in/web`: controllers gerados/delegates, mappers, ProblemDetail;
+- `adapters/out/persistence`: JPA entities/repositories/mappers;
+- `adapters/out/integration`: RestClient/event adapters com resilience4j;
+- `config` e `common` apenas para preocupacoes tecnicas claras.
+
+Nao fazer chamada HTTP dentro de transacao longa. Nao fazer adapter chamar adapter. Nao criar god service, generic repository, utils ou fallback que fabrique elegibilidade.
+
+PERSISTENCIA E MIGRATIONS
+
+Siga integralmente `contrato-operacional-para-migrations-seeds.txt`:
+
+- `V001` cria schema;
+- uma migration por tabela/constraint/trigger relevante, faixa V001-V099;
+- seeds DSV idempotentes em V101-V199;
+- `ddl-auto=validate`;
+- indices para consultas por passageiro, viagem, barqueiro, status, moderacao e periodo;
+- unique parcial/logica para uma avaliacao ativa por passageiro+viagem;
+- optimistic locking (`version`) onde houver concorrencia de moderacao;
+- timestamps `TIMESTAMPTZ` e auditoria;
+- soft delete/anonymization coerente com LGPD;
+- nenhuma FK para banco de outro microsservico; IDs externos sao UUIDs sem FK cross-database.
+
+INTEGRACOES E CONFIABILIDADE
+
+- Validacao de viagem/reserva/ingresso deve ser fail-closed: indisponibilidade externa nao torna passageiro elegivel.
+- Aplicar timeout, retry somente em operacoes seguras/idempotentes, circuit breaker e metricas por dependencia.
+- Implementar transactional outbox para eventos de dominio que atualizam notificacoes, auditoria, compliance, perfis e relatorios; nao usar dual write ingenuo.
+- Consumidores/processadores devem ser idempotentes e registrar event id.
+- Nao bloquear criacao da avaliacao por falha temporaria de notificacao/relatorio depois que a transacao local foi confirmada; publicar pelo outbox.
+- Definir reconciliacao de agregados de reputacao.
+
+NOTIFICACOES
+
+Integrar com os contratos reais de `api-notificacoes` para:
+
+- convite de feedback apos viagem concluida, com atraso configuravel (ex.: 24h);
+- lembrete unico opcional antes de expirar a janela;
+- confirmacao de recebimento;
+- resultado de moderacao quando aplicavel;
+- nova resposta/contestacao conforme preferencias do usuario.
+
+Nao enviar para passageiro sem preferencia/consentimento aplicavel. Templates pertencem ao servico de notificacoes; o servico de avaliacoes envia evento/contexto, nao renderiza e-mail.
+
+AUDITORIA, COMPLIANCE E SUPORTE
+
+- Registrar eventos criticos: create, update, publish, reject, respond, contest, resolve, report, anonymize.
+- Usar contratos reais de auditoria/compliance; se faltarem enums/acoes, estender no repositorio proprietario via prompt de integracoes.
+- Incidentes de seguranca, assedio, fraude, cobranca ou risco operacional devem poder criar ticket no servico correto com idempotencia e sem duplicar texto sensivel desnecessariamente.
+- Nao impor regra incoerente como proibir nota alta por existir ticket aberto; feedback e suporte podem coexistir.
+
+OBSERVABILIDADE
+
+- Actuator health/info/metrics/prometheus.
+- Readiness/liveness.
+- Health indicators para banco, outbox e dependencias criticas sem expor segredos.
+- Metricas: avaliacoes submetidas/publicadas/rejeitadas, latencia de moderacao, NPS, taxa de resposta, falhas de integracao, backlog do outbox.
+- Logs JSON e correlation id.
+- Registrar o servico no health checker pelo prompt de integracoes, nao duplicar monitoramento internamente.
+
+TESTES OBRIGATORIOS
+
+TDD e cobertura minima de 80% em domain/application:
+
+- invariantes de score, NPS, status e janela;
+- elegibilidade positiva e cada causa de inelegibilidade;
+- uma avaliacao por passageiro+viagem e concorrencia;
+- ownership/RBAC e tentativa de IDOR;
+- moderacao, contestacao, resposta unica, denuncia e anonimizacao;
+- calculo de agregados/NPS e exclusao de reviews nao publicadas;
+- outbox e idempotencia;
+- contract tests dos gateways reais;
+- `@WebMvcTest`/testes dos delegates OpenAPI;
+- Testcontainers PostgreSQL e Flyway limpo;
+- testes de OpenAPI runtime versus YAML;
+- arquitetura (ArchUnit se ja aceito no projeto) para impedir dependencia do domain em Spring/JPA.
+
+OPERACAO E DOCUMENTACAO
+
+Criar Maven Wrapper, pom.xml, Dockerfile, docker-compose.yml, Makefile, README, profiles dsv/hml/prd, OpenAPI, migrations e seeds conforme os documentos. O compose deve expor a API em `18021:8080`. Escolha a porta externa do PostgreSQL somente apos verificar todas as portas em uso e documente-a.
+
+CRITERIOS DE ACEITE
+
+1. `./mvnw clean verify` passa.
+2. JaCoCo atende a meta.
+3. Docker Compose sobe API e banco do servico.
+4. Health, Swagger, runtime OpenAPI e YAML estatico retornam 200 nos paths finais com `/api/v1` uma unica vez.
+5. Endpoint critico retorna diferente de 404.
+6. Migrations rodam em banco limpo; DSV recebe seeds e HML/PRD nao.
+7. Avaliacao inelegivel e impedida; avaliacao valida e persistida com idempotencia.
+8. RBAC e ownership tem testes negativos.
+9. Outbox e integracoes tem retry/idempotencia sem dual write.
+10. Nenhum dado pessoal aparece em logs ou endpoints publicos.
+11. Relatorio final lista arquivos, contratos usados, contratos adicionados, comandos e evidencias de validacao.

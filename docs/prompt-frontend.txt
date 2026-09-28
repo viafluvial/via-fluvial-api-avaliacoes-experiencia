@@ -1,0 +1,175 @@
+PROMPT ESPECIALIZADO - FRONTEND DE AVALIACOES E EXPERIENCIA
+
+PAPEL
+
+Voce e um engenheiro frontend senior e product designer responsavel por implementar no `via-fluvial-app` toda a experiencia de Avaliacoes e Experiencia. Entregue uma interface completa, refinada, responsiva, acessivel e integrada ao backend real. Nao entregue wireframe, pagina demonstrativa, mock permanente ou apenas plano.
+
+LEITURA OBRIGATORIA
+
+Antes de editar:
+
+1. Leia todos os arquivos de `via-fluvial-api-avaliacoes-experiencia/docs/`, especialmente `prompt.txt`, `prompt-backend.txt` e `prompt-integracoes-plataforma.txt`.
+2. Inspecione o design system, componentes, tokens, tipografia, icones, feedbacks, roteamento/navegacao e testes existentes no `via-fluvial-app`.
+3. Inspecione `src/app/config/apiServices.ts`, `src/app/services/httpClient.ts`, autenticacao/RBAC, `App.tsx`, perfil do passageiro, Minhas Viagens, area do barqueiro e painel administrativo.
+4. Confirme o OpenAPI efetivamente implementado pela API antes de criar o client. Gere tipos a partir do contrato; nao mantenha DTO manual divergente.
+
+OBJETIVO DE PRODUTO
+
+Criar uma jornada de feedback pos-viagem que seja rapida para quem quer apenas pontuar, rica para quem deseja explicar, segura para relatos sensiveis e util para passageiros, barqueiros e administradores. A experiencia deve parecer parte nativa da Via Fluvial, nao uma pagina generica acoplada depois.
+
+PRINCIPIOS DE UX
+
+- Mobile-first, pois o passageiro provavelmente responde pelo celular apos a viagem.
+- Acao principal concluivel em poucos passos, com progresso claro e sem formulario longo em uma unica tela.
+- Progressive disclosure: nota geral primeiro; categorias, comentario e sugestoes aparecem de forma organizada.
+- Nunca usar avaliacao por hover como unico mecanismo. Estrelas devem funcionar por toque, teclado e leitor de tela.
+- Labels explicitos para a escala, por exemplo `Ruim` a `Excelente`; nao depender apenas da cor ou do icone.
+- Preservar rascunho local durante a sessao e alertar antes de descartar alteracoes.
+- Estados de loading, empty, offline, erro, sucesso, permissao negada e inelegibilidade devem ser completos.
+- Erros inline devem apontar exatamente o campo; falhas globais devem preservar dados digitados.
+- Confirmacao final deve ser objetiva e explicar o que acontece com comentario, moderacao e anonimato.
+- Incidente de seguranca, assedio, fraude ou cobranca deve oferecer caminho imediato para Suporte sem fazer o usuario repetir tudo.
+- Nao usar cards aninhados, heros de marketing, gradientes decorativos, blobs ou excesso de cantos arredondados.
+- Usar icones da biblioteca ja instalada (preferencialmente Lucide se for o padrao), com tooltip em icones nao obvios.
+- Respeitar a linguagem visual existente, mas elevar acabamento, espacamento, hierarquia, contraste e estados interativos.
+
+JORNADA DO PASSAGEIRO
+
+Entrada:
+
+- Em `Minhas Viagens`, exibir CTA `Avaliar viagem` somente quando a API informar elegibilidade.
+- Exibir estado `Avaliacao enviada` e acesso ao detalhe quando ja existir avaliacao.
+- Nao inferir elegibilidade apenas no frontend.
+- Permitir deep link autenticado vindo de notificacao, preservando o destino durante login.
+
+Fluxo de avaliacao:
+
+1. Cabecalho compacto com resumo real da viagem: rota, data, embarcacao e, quando permitido, barqueiro.
+2. Nota geral obrigatoria de 1 a 5.
+3. Notas por categoria: plataforma, barqueiro, embarcacao, trajeto, embarque/organizacao e atendimento, conforme questionario retornado pela API.
+4. NPS opcional 0 a 10 com rotulos de extremos.
+5. Tags controladas sugeridas pela API, adaptadas a nota e categoria.
+6. Comentario/sugestao opcional com contador, limite e orientacao para nao incluir dados pessoais.
+7. Tipo de manifestacao quando aplicavel: elogio, sugestao, reclamacao ou relato de seguranca.
+8. Opcao clara de publicacao anonima; explicar diferenca entre anonimato publico e identificacao interna para verificacao/auditoria.
+9. Revisao final resumida antes do envio quando o fluxo tiver varios passos.
+10. Confirmacao com proxima acao: voltar para viagens, ver avaliacao ou abrir suporte.
+
+Para nota baixa, perguntar de forma nao coercitiva o que ocorreu e apresentar suporte. Nao bloquear envio por falta de comentario. Para relato sensivel, mostrar privacidade e prioridade de atendimento.
+
+Historico do passageiro:
+
+- Integrar ao perfil ou a `Minhas Viagens`, seguindo o padrao real de navegacao.
+- Listagem paginada com status de moderacao, data, viagem, nota e acao de detalhe.
+- Permitir editar apenas se API autorizar.
+- Mostrar resposta do barqueiro e status de denuncia/contestacao que o passageiro possa conhecer.
+- Oferecer acao LGPD de anonimizar/excluir conforme politica, com confirmacao forte e efeito explicado.
+
+AREA DO BARQUEIRO (GESTOR)
+
+Adicionar uma secao nativa na area de gestao do barqueiro:
+
+- resumo de nota media, distribuicao 1..5, total de viagens verificadas e tendencia;
+- NPS e dimensoes quando volume e privacidade permitirem;
+- filtros por periodo, embarcacao e rota usando dados retornados pela API;
+- lista de comentarios publicados, sempre sem PII do passageiro;
+- badges de viagem verificada e resposta enviada;
+- resposta unica com preview, limite e confirmacao;
+- abertura e acompanhamento de contestacao;
+- empty states uteis para barqueiro novo ou sem volume minimo;
+- nao criar ranking humilhante nem comparacao sem contexto/amostra minima.
+
+PAINEL ADMINISTRATIVO
+
+Adicionar modulo de moderacao e qualidade da experiencia ao painel da plataforma:
+
+- fila paginada com tabs/contadores por `SUBMITTED`, `UNDER_REVIEW`, `CONTESTED`, `REPORTED`, `PUBLISHED` e `REJECTED`, conforme contrato final;
+- filtros por risco, nota, periodo, categoria, barqueiro, embarcacao e rota;
+- busca por IDs operacionais, nunca por PII exposta sem necessidade;
+- detalhe lado a lado ou drawer responsivo com texto, sinais de compliance, viagem verificada e historico auditavel;
+- aprovar/rejeitar com motivo obrigatorio quando necessario;
+- resolver contestacao sem editar silenciosamente a nota original;
+- acao para escalar a suporte/compliance;
+- bulk action apenas se segura e suportada pelo backend; nao aprovar em massa conteudo sensivel;
+- dashboard de indicadores com definicoes, periodo, amostra e estados sem dados.
+
+ENGENHARIA E OPERACOES
+
+Registrar `api-avaliacoes-experiencia` no service registry compartilhado para que apareca no health checker e no dashboard Engenharia e Operacoes. Nao criar um segundo painel de saude. Validar:
+
+- status do servico;
+- latencia e historico conforme capacidades atuais;
+- link para documentacao OpenAPI;
+- categoria coerente, preferencialmente `Relatorios e Analytics` ou uma categoria existente definida pelo produto;
+- URLs local, backend, gateway e docs vindas da configuracao central;
+- ausencia de regressao nos demais servicos.
+
+INTEGRACAO HTTP E TIPOS
+
+- Adicionar `avaliacoesExperiencia` a `ApiServiceKey` e ao registro em `apiServices.ts`.
+- Prefixo de variaveis: `VIA_FLUVIAL_API_AVALIACOES_EXPERIENCIA`.
+- Defaults locais: backend `http://localhost:18021/api/v1`, docs `http://localhost:18021/api/v1/v3/api-docs`; configurar gateway real de acordo com o padrao da plataforma.
+- Criar pasta de integracao seguindo a convencao existente, com tipos gerados pelo OpenAPI e service fino sobre o `httpClient` compartilhado.
+- Reusar injecao de Authorization, `X-Roles`, `X-User-Id`, `X-Boatman-Id` e correlation id existente. Nao duplicar fetch/axios/client.
+- Acrescentar script `generate:openapi:avaliacoes-experiencia` e inclui-lo no agregador `generate:openapi`.
+- Normalizar Problem Details e exibir mensagens acionaveis; nao mostrar stacktrace ou texto tecnico ao usuario.
+- Cancelar requisicoes obsoletas e evitar race conditions em filtros/paginacao.
+
+RBAC E OWNERSHIP
+
+- `PASSAGEIRO`: propria avaliacao e historico.
+- `GESTOR`: apenas metricas/comentarios do proprio barqueiro.
+- `ADMINISTRADOR`: moderacao e indicadores.
+- `SUPORTE`: contexto de atendimento conforme permissoes.
+- `AUDITOR`: leitura quando prevista.
+- UI oculta acoes sem permissao, mas backend continua sendo fonte de autorizacao.
+- Tratar 401, 403 e 404 de forma distinta; nao transformar 403 em conteudo inexistente.
+
+ACESSIBILIDADE
+
+Atender WCAG 2.2 AA no escopo implementado:
+
+- navegacao completa por teclado;
+- foco visivel e retorno de foco ao fechar modal/drawer;
+- modal com focus trap e Escape;
+- estrelas/radios com nomes acessiveis e estado selecionado;
+- `aria-live` para confirmacao/erro assincrono sem excesso;
+- contraste AA, alvo de toque adequado e texto legivel em zoom 200%;
+- graficos com resumo textual/tabela alternativa;
+- labels e mensagens associados aos campos;
+- `prefers-reduced-motion` respeitado.
+
+RESPONSIVIDADE E QUALIDADE VISUAL
+
+Validar no minimo em 360x800, 768x1024 e desktop 1440x900:
+
+- sem overflow horizontal;
+- botoes e labels sem truncamento incoerente;
+- filtros colapsam de forma util no mobile;
+- graficos e tabela viram representacao adequada no mobile, nao miniaturas ilegíveis;
+- dimensoes estaveis para estrelas, badges, toolbar, paginacao e skeletons;
+- nenhum elemento sobrepoe outro.
+
+TESTES
+
+- unitarios para mapeamento de status, formatacao, regras de apresentacao e service;
+- testes de componentes para rating por teclado/toque, validacao, preservacao de dados e estados;
+- testes de RBAC para PASSAGEIRO/GESTOR/ADMINISTRADOR;
+- testes de integracao com MSW ou mecanismo existente, baseados nos schemas OpenAPI;
+- E2E da jornada: passageiro elegivel envia; inelegivel nao envia; gestor consulta e responde; admin modera; health dashboard mostra o servico;
+- axe/accessibility no fluxo principal;
+- screenshots Playwright nos tres viewports, incluindo formularios, dashboard e moderacao;
+- build, lint, typecheck e testes devem passar.
+
+CRITERIOS DE ACEITE
+
+1. O CTA aparece apenas para viagem elegivel retornada pelo backend.
+2. O passageiro conclui a avaliacao no mobile com teclado/leitor de tela e sem perder dados em erro recuperavel.
+3. GESTOR ve apenas dados proprios e sem PII.
+4. ADMINISTRADOR modera e resolve contestacoes com motivo e historico.
+5. Integracao usa o registry e o HTTP client existentes.
+6. Tipos sao gerados do OpenAPI, sem duplicacao manual divergente.
+7. O servico aparece corretamente em Engenharia e Operacoes.
+8. Todos os estados visuais e responsivos foram verificados por testes e screenshots.
+9. Nao existem mocks permanentes, botoes inertes, texto de tutorial sobre a interface ou telas de demonstracao.
+10. O relatorio final informa arquivos alterados, jornadas validadas, screenshots e comandos executados.

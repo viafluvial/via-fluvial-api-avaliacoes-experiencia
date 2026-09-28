@@ -1,0 +1,223 @@
+PROMPT ESPECIALIZADO - INTEGRACOES E PLATAFORMA
+
+PAPEL
+
+Voce e um arquiteto de integracao e engenheiro de plataforma senior. Sua responsabilidade e integrar `api-avaliacoes-experiencia` ao ecossistema Via Fluvial de forma executavel, observavel, idempotente e coerente com os contratos reais. Implemente as alteracoes necessarias nos repositorios proprietarios, sem transformar o novo servico em um monolito distribuido.
+
+LEITURA E DESCOBERTA OBRIGATORIAS
+
+Leia todos os arquivos de `via-fluvial-api-avaliacoes-experiencia/docs/`. Depois inspecione o codigo atual de:
+
+- raiz `Makefile`, `api-teste.sh`, scripts `dev-*`, `validate-seeds.sh`, `rebuild-seeds.sh` e `docker-compose.shared-db.yml`;
+- `shared-db/init/00-init-vfa-databases.sql`;
+- `via-fluvial-api-engenharia-operacoes`;
+- `via-fluvial-app`;
+- viagens, reservas, venda-ingressos, perfis-usuarios, notificacoes, suporte/ticket-suporte, auditoria, compliance e relatorios.
+
+Nao assuma como existente nenhum endpoint, evento, enum, header ou DTO apenas porque ele parece conveniente. Localize a implementacao/OpenAPI real. Se o contrato nao existir, defina a alteracao minima no repositorio dono, atualize seu OpenAPI primeiro, implemente-a e teste-a.
+
+IDENTIDADE OPERACIONAL
+
+- Service slug: `avaliacoes-experiencia`.
+- Logical/service name: `api-avaliacoes-experiencia`.
+- Host local externo: `localhost:18021`.
+- Porta interna: `8080`.
+- Context path: `/api/v1`.
+- Health: `/api/v1/actuator/health`.
+- Docs runtime: `/api/v1/v3/api-docs`.
+- Banco: `db-avaliacoes-experiencia`.
+- Schema: `sc-avaliacoes-experiencia`.
+- A porta 18021 fica reservada para este servico.
+
+REGISTRO E ORQUESTRACAO RAIZ
+
+1. Adicionar `avaliacoes-experiencia` a `ALL_APIS` no Makefile raiz e atualizar contagens/textos obsoletos de 20 para 21 APIs.
+2. Garantir que `api-teste.sh` descubra, valide, suba, pare, reinicie, liste, consulte status e logs do servico usando o mesmo mecanismo dos demais.
+3. Integrar aos scripts `dev-up-stable`, `dev-down-stable` e `dev-check` somente se a politica atual incluir todos os servicos ou se o novo dominio for necessario ao fluxo validado; nao aumentar o preset estavel sem justificativa.
+4. Confirmar `make api-up APIS="avaliacoes-experiencia"`, `make api-down API=avaliacoes-experiencia`, `make api-ps` e `make api-logs`.
+5. Nao criar um compose raiz duplicando os composes por servico.
+
+BANCO COMPARTILHADO
+
+Atualizar `shared-db/init/00-init-vfa-databases.sql` seguindo exatamente o padrao real do arquivo:
+
+- criar `db-avaliacoes-experiencia` se ausente, com owner compartilhado usado pela plataforma (`vfa_app`) quando executado no shared DB;
+- conectar ao banco e criar `sc-avaliacoes-experiencia` com owner coerente;
+- nao introduzir role dedicada divergente apenas neste script se o shared DB usa `vfa_app` para todos;
+- manter o usuario dedicado no compose isolado do proprio microsservico, conforme seu contrato local;
+- validar inicializacao limpa e reexecucao segura.
+
+Atualizar scripts de validacao/rebuild de seeds somente pelos mecanismos genericos existentes. O novo servico deve respeitar toggle global de seeds caso os demais o usem.
+
+ENGENHARIA E OPERACOES - OBRIGATORIO
+
+Registrar `api-avaliacoes-experiencia` na fonte de verdade do health checker em `via-fluvial-api-engenharia-operacoes`:
+
+- slug/nome corretos;
+- local direct base URL em `http://${ENGINEERING_DSV_HOST:${ENGINEERING_LOCAL_HOST:localhost}}:18021/api/v1`, adaptado a sintaxe real;
+- URLs HML/PRD/gateway conforme o padrao efetivo;
+- actuator health, OpenAPI e demais probes suportados;
+- categoria e criticidade coerentes;
+- timeouts e frequencia sem tratamento especial desnecessario.
+
+Atualizar qualquer teste de contagem, fixture, seed, enum, configuracao tipada ou documentacao do registro. Validar que o servico aparece no dashboard Engenharia e Operacoes do frontend e que o historico/latencia/status usam o pipeline existente. Nao criar painel flutuante ou health checker paralelo.
+
+FRONTEND SERVICE REGISTRY
+
+Em `via-fluvial-app/src/app/config/apiServices.ts`:
+
+- adicionar chave `avaliacoesExperiencia`;
+- nome `api-avaliacoes-experiencia`;
+- prefixo `VIA_FLUVIAL_API_AVALIACOES_EXPERIENCIA`;
+- backend local `http://localhost:18021/api/v1` quando esse for o padrao dos servicos locais;
+- docs local `http://localhost:18021/api/v1/v3/api-docs`;
+- gateway `.../avaliacoes-experiencia/api/v1` conforme dominio real da plataforma;
+- categoria existente coerente.
+
+Propagar a nova configuracao para arquivos de runtime/env/documentacao do frontend se houver listas explicitas. Nao hardcode API key.
+
+CONTRATOS ENTRE DOMINIOS
+
+Matriz de responsabilidades:
+
+- Viagens e dona do ciclo de vida e do evento de conclusao.
+- Reservas e dona da associacao entre passageiro e viagem.
+- Venda de ingressos e dona do bilhete/embarque.
+- Perfis e dono da identidade publica e vinculo do barqueiro.
+- Avaliacoes e dona da elegibilidade consolidada, review, moderacao e agregados.
+- Notificacoes e dona de templates e entrega.
+- Suporte e dono de tickets/incidentes.
+- Auditoria e dona da trilha central persistente.
+- Compliance e dono das politicas e analises de conformidade.
+- Relatorios e dono da consolidacao transversal, nao das avaliacoes fonte.
+
+FLUXO POS-VIAGEM
+
+Implemente a integracao pelo mecanismo assicrono ja adotado na plataforma. Se nao houver broker/outbox compartilhado, implemente transactional outbox no produtor/consumidor e um dispatcher HTTP idempotente, sem fingir que existe Kafka/RabbitMQ.
+
+Fluxo esperado:
+
+1. Viagens conclui a viagem e emite `TRIP_COMPLETED` com `eventId`, `tripId`, `completedAt`, correlation id e referencias minimas.
+2. Avaliacoes recebe/processa idempotentemente e consulta fontes autoritativas quando necessario.
+3. Passageiros elegiveis sao determinados por reserva + comprovacao de embarque.
+4. Avaliacoes agenda convite com `api-notificacoes`, respeitando preferencias/consentimento e atraso configuravel.
+5. Passageiro consulta elegibilidade e envia review.
+6. Avaliacoes publica eventos de review/moderacao via outbox.
+7. Perfis recebe snapshot/reputacao idempotente apenas se esse cache for necessario.
+8. Relatorios recebe indicadores/eventos sem passar a ser fonte de verdade.
+9. Auditoria recebe acoes criticas.
+10. Conteudo sensivel pode ser encaminhado a Compliance/Suporte com minimo de PII.
+
+CONTRATOS MINIMOS A CONFIRMAR OU IMPLEMENTAR
+
+Nao fixe paths antes da descoberta. O resultado precisa cobrir semanticamente:
+
+- obter viagem e status/conclusao;
+- validar reserva do passageiro na viagem;
+- validar bilhete embarcado/check-in autoritativo;
+- resolver barqueiro, embarcacao e rota da viagem;
+- obter preferencia de notificacao quando aplicavel;
+- enviar notificacao por template existente/criado no repositorio correto;
+- criar ticket de suporte idempotente para relato critico;
+- publicar trilha de auditoria;
+- executar verificacao de compliance/moderacao quando suportada;
+- enviar indicador/evento a relatorios;
+- atualizar snapshot de reputacao em perfis, se adotado.
+
+Se um endpoint sugerido em material exploratorio nao existir, nao codifique client quebrado. Atualize a matriz de contratos com: owner, metodo/evento, path/topic, request, response, auth, idempotencia, timeout, erros e fallback.
+
+SEGURANCA SERVICE-TO-SERVICE
+
+- Usar credencial OAuth2 client credentials/JWT de servico onde o padrao existe.
+- DSV pode ter modo dev controlado, nunca como default em HML/PRD.
+- Propagar `X-Correlation-Id`.
+- Definir role/scope `SERVICE` ou equivalente real com minimo privilegio.
+- Nao confiar em `X-User-Id`, `X-Roles` ou `X-Boatman-Id` vindos diretamente da internet em producao; gateway/backend devem derivar de claims confiaveis.
+- Nao enviar comentario completo a servicos que precisam apenas de score/IDs.
+
+RESILIENCIA E CONSISTENCIA
+
+- Timeout explicito por dependencia.
+- Retry somente para falha transitoria e operacao idempotente, com backoff/jitter.
+- Circuit breaker e metricas por target.
+- Fail-closed para elegibilidade: dependencia indisponivel nao autoriza review.
+- Falha de notificacao/relatorio/auditoria apos commit local deve permanecer no outbox para retry, nao desfazer review ja aceita.
+- Dead-letter/reprocessamento manual auditavel para eventos esgotados.
+- Idempotency key/event id com unique constraint no consumidor.
+- Reconciliacao periodica de reputacao e backlog.
+- Evitar cadeia sincrona longa em uma unica requisicao do passageiro.
+
+AUDITORIA E COMPLIANCE
+
+Validar o contrato real de auditoria antes de publicar. Registrar no minimo:
+
+- `EVALUATION_SUBMITTED`;
+- `EVALUATION_UPDATED`;
+- `EVALUATION_PUBLISHED`;
+- `EVALUATION_REJECTED`;
+- `EVALUATION_REPORTED`;
+- `EVALUATION_CONTESTED`;
+- `EVALUATION_CONTEST_RESOLVED`;
+- `BOATMAN_RESPONSE_CREATED`;
+- `EVALUATION_ANONYMIZED`.
+
+Metadados devem conter IDs e resultado, nao texto integral/PII. Estender enums/schema/OpenAPI do servico proprietario quando necessario e adicionar testes de compatibilidade.
+
+NOTIFICACOES
+
+Adicionar templates no repositorio/jornada real de notificacoes, com canais/preferencias existentes:
+
+- convite para avaliar;
+- lembrete antes do prazo;
+- recebimento da avaliacao;
+- resultado da moderacao;
+- resposta do barqueiro;
+- atualizacao de contestacao.
+
+Templates devem usar links/deep links configuraveis por ambiente, sem URLs PRD hardcoded no codigo. Nao expor identidade de passageiro anonimo ao barqueiro.
+
+RELATORIOS E PERFIS
+
+- Relatorios recebe apenas dimensoes e metricas necessarias, com IDs pseudonimizados.
+- Definir versao do evento/schema e compatibilidade retroativa.
+- Perfis pode armazenar `averageRating`, `verifiedEvaluationCount` e `ratingUpdatedAt` como snapshot, atualizado por evento idempotente.
+- Nao permitir que patch manual de perfil seja a fonte de verdade da reputacao.
+
+API GATEWAY E AMBIENTES
+
+Preparar configuracoes/documentacao para DSV/HML/PRD:
+
+- rota externa para `avaliacoes-experiencia`;
+- preserve `/api/v1` sem duplicacao;
+- CORS apenas para origens configuradas;
+- rate limits mais restritos em submit, denuncia, resposta e moderacao;
+- health/docs com politica coerente;
+- secrets exclusivamente via ambiente/secret manager;
+- URLs internas por DNS de servico em HML/PRD.
+
+TESTES DE INTEGRACAO E E2E
+
+1. Shared DB cria database/schema e o servico migra em ambiente limpo.
+2. Orquestrador raiz sobe e identifica o servico.
+3. Engenharia e Operacoes detecta UP/DOWN, docs e latencia.
+4. Evento de viagem concluida e processado uma vez mesmo com reentrega.
+5. Passageiro com reserva+embarque fica elegivel; sem embarque fica inelegivel.
+6. Submit gera outbox e efeitos posteriores sem dual write.
+7. Indisponibilidade de reservas/ingressos falha fechada.
+8. Falha de notificacoes entra em retry sem duplicar envio.
+9. Auditoria nao recebe PII.
+10. Atualizacao de reputacao e reconciliavel.
+11. Deep link abre o fluxo correto no frontend.
+12. Suite de contratos detecta drift entre OpenAPI do provider e clients.
+
+CRITERIOS DE ACEITE
+
+- `make api-list` inclui o novo slug.
+- `make api-up APIS="avaliacoes-experiencia"` sobe o servico em 18021.
+- Shared DB e compose isolado funcionam.
+- Health checker e dashboard exibem o servico pelo registro central.
+- Todos os contratos usados existem e estao documentados; nenhum client aponta para endpoint imaginario.
+- Chamadas externas possuem auth, correlation id, timeout, resiliencia e idempotencia.
+- O fluxo completo viagem concluida -> convite -> elegibilidade -> avaliacao -> moderacao -> reputacao/relatorio funciona em E2E.
+- Builds e testes dos repositorios alterados passam.
+- Relatorio final inclui matriz de contratos, arquivos alterados, comandos, resultados, pendencias reais e riscos residuais.

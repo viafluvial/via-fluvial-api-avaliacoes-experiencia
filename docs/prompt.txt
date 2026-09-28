@@ -1,0 +1,210 @@
+PROMPT PRINCIPAL - IMPLEMENTACAO COMPLETA DE AVALIACOES E EXPERIENCIA
+
+MISSAO
+
+Implemente de ponta a ponta o bounded context `avaliacoes-experiencia` na plataforma Via Fluvial: microsservico Java/Spring Boot, banco e migrations, API OpenAPI, seguranca, integracoes entre microsservicos, observabilidade, health checker, dashboard Engenharia e Operacoes e frontend React com UX de alta qualidade.
+
+Este e um prompt de execucao. Nao entregue somente arquitetura, backlog, exemplos, arquivos parciais ou pseudocodigo. Trabalhe nos repositorios da workspace, implemente, teste, execute os fluxos e apresente evidencias verificaveis. Preserve alteracoes existentes do usuario e nao refatore areas fora do escopo sem necessidade.
+
+FONTES OBRIGATORIAS
+
+Antes da primeira alteracao, leia integralmente os arquivos abaixo, todos localizados nesta pasta `docs/`:
+
+1. `avaliacoes-experiencia.txt` - identidade, escopo e parametros do microsservico.
+2. `padroes-projeto-java-spring-boot.txt` - stack, arquitetura, API-First, seguranca, observabilidade e testes.
+3. `contrato-operacional-para-dockerfile-docker-compose-makefile.txt` - build e operacao.
+4. `contrato-operacional-para-migrations-seeds.txt` - contrato Flyway SQL-first.
+5. `contrato-operacional-para-swagger-openapi.txt` - base path, Swagger e OpenAPI.
+6. `prompt-backend.txt` - implementacao funcional e tecnica do backend.
+7. `prompt-frontend.txt` - jornadas, UX, acessibilidade e integracao frontend.
+8. `prompt-integracoes-plataforma.txt` - orquestracao, shared DB, contratos, health checker e Engenharia e Operacoes.
+
+Todos sao obrigatorios e complementares. Nao ignore um documento porque outro parece mais detalhado.
+
+PRECEDENCIA E RESOLUCAO DE CONFLITOS
+
+Quando houver conflito, aplique esta ordem:
+
+1. Seguranca, privacidade/LGPD, integridade de dados e contrato efetivamente publicado por um servico existente.
+2. Regras funcionais explicitas de `prompt-backend.txt` e jornadas de `prompt-frontend.txt`.
+3. Contratos operacionais especializados de migrations, OpenAPI e Docker/Compose/Makefile.
+4. Padroes gerais Java/Spring.
+5. Texto descritivo de identidade do servico.
+
+Resolva explicitamente estas inconsistencias conhecidas:
+
+- O pacote `br.com.viafluvial.avaliacoes-experiencia` e invalido. Use `br.com.viafluvial.avaliacoesexperiencia`.
+- A porta externa da API nao e placeholder: reserve e use `18021`; porta interna `8080`.
+- Use `server.servlet.context-path=/api/v1` como unico prefixo. OpenAPI paths, controllers e configuracao Springdoc nao repetem `/api/v1`.
+- O Flyway nao reconhece prefixo `S`. Estrutura usa `V001-V099`; seeds DSV usam versioned migrations `V101-V199` em `db/seed/dsv`.
+- No shared DB, siga o owner real `vfa_app`; no compose isolado do servico, use o usuario local definido no contrato.
+- OpenAPI estatico e runtime sao duas representacoes controladas do mesmo contrato. O YAML versionado dirige a geracao e deve permanecer semanticamente equivalente ao runtime Springdoc.
+
+Se surgir outro conflito, registre-o no relatorio final com evidencia e decisao. Nao silencie divergencias.
+
+IDENTIDADE FIXA
+
+- Repositorio: `via-fluvial-api-avaliacoes-experiencia`.
+- Bounded context e slug: `avaliacoes-experiencia`.
+- Maven: `br.com.viafluvial:api-avaliacoes-experiencia`.
+- `spring.application.name`: `api-avaliacoes-experiencia`.
+- Pacote Java: `br.com.viafluvial.avaliacoesexperiencia`.
+- API: `http://localhost:18021/api/v1`.
+- Banco: `db-avaliacoes-experiencia`.
+- Schema: `sc-avaliacoes-experiencia`.
+- Perfis: `dsv`, `hml`, `prd`.
+
+ESCOPO FUNCIONAL
+
+O servico e a fonte da verdade para feedback verificado pos-viagem, incluindo:
+
+- nota geral e dimensoes plataforma, barqueiro, embarcacao, trajeto, embarque/organizacao e atendimento;
+- NPS, tags, comentario, elogio, sugestao, reclamacao e relato de seguranca;
+- elegibilidade baseada em viagem concluida, reserva e evidencia de embarque;
+- uma avaliacao ativa por passageiro e viagem;
+- moderacao, denuncia, resposta do barqueiro e contestacao;
+- anonimato publico, direitos LGPD e trilha auditavel;
+- indicadores, tendencias, NPS e reputacao com volume e privacidade adequados;
+- notificacao pos-viagem e integracao com suporte para relatos criticos.
+
+Nao copie entidades de outros dominios para dentro deste servico. Referencias externas sao IDs/snapshots minimos, resolvidos por ports out e contratos reais.
+
+PRINCIPIOS INEGOCIAVEIS
+
+- Java 21, Spring Boot 3.x compativel com os servicos maduros da workspace, Maven Wrapper.
+- DDD, Clean Architecture, Ports and Adapters e SOLID.
+- API-First OpenAPI 3.1 com interfaces e DTOs gerados; codigo gerado nunca e editado manualmente.
+- PostgreSQL, Flyway SQL-first e `ddl-auto=validate`.
+- OAuth2 Resource Server JWT em HML/PRD e RBAC/ownership testados.
+- RFC 7807 para erros.
+- Logs JSON, correlation id, metricas, tracing, actuator, readiness/liveness.
+- Transactional outbox e idempotencia para efeitos externos apos commit.
+- Fail-closed na elegibilidade; falha externa nunca autoriza passageiro indevido.
+- Nenhuma PII, token, comentario integral ou segredo em logs/metadados desnecessarios.
+- Testes orientam a implementacao e o build falha abaixo de 80% em domain/application.
+
+FASE 0 - DESCOBERTA E BASELINE
+
+Antes de codificar:
+
+1. Inspecione o estado de todos os repositorios envolvidos e preserve alteracoes existentes.
+2. Localize os OpenAPIs, endpoints, eventos, roles, headers e DTOs reais dos servicos relacionados.
+3. Use `via-fluvial-api-viagens` como referencia arquitetural inicial, auditoria para seguranca/trilha e compliance para privacidade, mas valide cada padrao no codigo atual.
+4. Execute ou registre o baseline de builds/testes relevantes antes das mudancas.
+5. Produza uma matriz de contratos owner/provider -> consumer com autenticacao, idempotencia, timeout e erros.
+
+Nao use como implementado nenhum endpoint sugerido por exploracao preliminar. Se faltar contrato, atualize primeiro o OpenAPI do servico proprietario e implemente a extensao minima nesse repositorio.
+
+FASE 1 - BACKEND
+
+Execute integralmente `prompt-backend.txt`:
+
+- scaffold completo Maven/Spring Boot;
+- OpenAPI 3.1 e endpoints de passageiro, gestor, administracao e uso interno;
+- dominio, use cases, ports, adapters REST/JPA/integracoes;
+- RBAC, ownership, moderacao, contestacao, resposta, denuncia e LGPD;
+- migrations, seeds, outbox, agregados e reconciliacao;
+- observabilidade, documentacao e testes.
+
+Nao avance considerando backend concluido enquanto `./mvnw clean verify` nao passar e API/DB nao subirem em ambiente limpo.
+
+FASE 2 - INTEGRACOES E PLATAFORMA
+
+Execute integralmente `prompt-integracoes-plataforma.txt`:
+
+- adicionar a 21a API ao Makefile/orquestrador raiz;
+- provisionar database/schema no shared DB;
+- integrar viagem concluida, reservas, bilhetes/embarque, perfis, notificacoes, suporte, auditoria, compliance e relatorios por contratos reais;
+- registrar o servico no backend do health checker `api-engenharia-operacoes`;
+- atualizar registry/configuracoes compartilhadas;
+- validar retries, outbox, idempotencia, auth service-to-service e correlation id.
+
+O dashboard Engenharia e Operacoes e a unica experiencia de saude central. Nao crie monitor paralelo.
+
+FASE 3 - FRONTEND UX-FIRST
+
+Execute integralmente `prompt-frontend.txt` no `via-fluvial-app`:
+
+- client tipado gerado do OpenAPI e registro central `avaliacoesExperiencia`;
+- CTA pos-viagem e fluxo mobile-first de avaliacao;
+- historico do passageiro;
+- dashboard de reputacao e respostas/contestacoes do GESTOR;
+- fila de moderacao e indicadores do ADMINISTRADOR;
+- estados completos, RBAC, ownership, acessibilidade WCAG 2.2 AA e responsividade;
+- inclusao do servico no dashboard Engenharia e Operacoes existente.
+
+A interface deve ser visualmente polida e coerente com o produto. Nao aceite tela generica de formulario, cards aninhados, controles inertes, mocks permanentes, labels truncados, sobreposicoes ou experiencia desktop comprimida no celular.
+
+FASE 4 - VALIDACAO INTEGRADA
+
+Execute validacoes reais e corrija ate ficarem verdes:
+
+Backend:
+
+- `./mvnw clean verify`;
+- cobertura JaCoCo;
+- migrations e seeds em PostgreSQL limpo;
+- build de imagem e Docker Compose;
+- endpoints health, Swagger, runtime OpenAPI e YAML estatico em `/api/v1`;
+- verificacao automatizada de equivalencia contratual OpenAPI.
+
+Frontend:
+
+- instalacao/build conforme package manager do repositorio;
+- lint, typecheck e testes;
+- geracao OpenAPI sem diff inesperado;
+- Playwright/E2E e verificacao de acessibilidade;
+- screenshots em 360x800, 768x1024 e 1440x900, sem overflow ou sobreposicao.
+
+Plataforma:
+
+- `make api-list` mostra `avaliacoes-experiencia`;
+- `make api-up APIS="avaliacoes-experiencia"` sobe API na porta 18021;
+- shared DB provisiona banco/schema;
+- health checker detecta UP, DOWN, latencia e docs;
+- dashboard Engenharia e Operacoes exibe o novo servico pelo registro central;
+- contratos provider/consumer passam;
+- fluxo E2E completo passa.
+
+CENARIOS E2E OBRIGATORIOS
+
+1. Viagem concluida + reserva + embarque torna passageiro elegivel.
+2. Viagem nao concluida, passageiro alheio ou sem embarque nao permite avaliar.
+3. Submit duplicado nao cria duas avaliacoes.
+4. Passageiro envia nota/comentario; falha temporaria em notificacao nao perde nem duplica a avaliacao.
+5. Comentario sensivel entra em moderacao e pode escalar a suporte/compliance.
+6. Administrador aprova/rejeita com motivo e auditoria.
+7. Barqueiro ve somente dados proprios/publicados, responde uma vez e contesta.
+8. Passageiro acompanha historico/status e exerce acao LGPD permitida.
+9. Agregados/NPS ignoram registros que nao podem ser publicados/contabilizados conforme regra.
+10. Reputacao/relatorios sao atualizados de modo idempotente e reconciliavel.
+11. Roles indevidas e tentativas de IDOR recebem 403/404 conforme politica sem vazar dados.
+12. Engenharia e Operacoes reflete a saude da API sem painel paralelo.
+
+DEFINICAO DE PRONTO
+
+A entrega so esta pronta quando:
+
+- nao existem TODOs funcionais, stubs, botoes inertes, mocks permanentes ou endpoints imaginarios;
+- builds e testes dos repositorios alterados passam;
+- backend, banco e frontend funcionam juntos;
+- API externa, runtime OpenAPI e YAML estatico estao coerentes;
+- RBAC, ownership, LGPD, idempotencia e resiliencia possuem testes negativos e positivos;
+- os fluxos PASSAGEIRO, GESTOR e ADMINISTRADOR estao completos;
+- o novo servico aparece no orquestrador, shared DB, registry frontend, health checker e dashboard Engenharia e Operacoes;
+- nao ha prefixo `/api/v1/api/v1`, segredo hardcoded ou PII em logs;
+- documentacao operacional ensina a executar e validar o sistema.
+
+RELATORIO FINAL OBRIGATORIO
+
+Ao concluir, informe de forma objetiva:
+
+1. Repositorios e arquivos alterados.
+2. Decisoes de dominio e conflitos resolvidos.
+3. Matriz final de contratos entre servicos.
+4. Endpoints e jornadas implementados.
+5. Migrations/seeds e volumes de massa.
+6. Comandos executados e resultados de build, testes, cobertura, E2E e acessibilidade.
+7. URLs locais finais, incluindo API, Swagger, OpenAPI e frontend.
+8. Evidencias do health checker/dashboard e screenshots responsivas.
+9. Pendencias reais que dependam de infraestrutura externa, sem marcar como concluido o que nao foi validado.

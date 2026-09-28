@@ -1,0 +1,554 @@
+openapi: 3.1.0
+info:
+  title: api-avaliacoes-experiencia
+  version: 1.0.0
+  description: API responsavel por avaliacoes e experiencia, incluindo coleta de feedback pos-viagem, moderacao e indicadores de satisfacao.
+servers:
+  - url: /avaliacoes-experiencia/api/v1
+    description: Runtime de Desenvolvimento
+  - url: https://api-avaliacoes-experiencia.hml.viafluvial.com.br/api/v1
+    description: Runtime de Homologacao
+  - url: https://api-avaliacoes-experiencia.prd.viafluvial.com.br/api/v1
+    description: Runtime de Producao
+security:
+  - bearerAuth: []
+tags:
+  - name: Passenger Evaluations
+    description: Elegibilidade e avaliacoes do passageiro autenticado.
+  - name: Boatman Experience
+    description: Reputacao, respostas e contestacoes do barqueiro autenticado.
+  - name: Evaluation Moderation
+    description: Moderacao e indicadores administrativos.
+  - name: Experience Events
+    description: Eventos internos idempotentes do ciclo de viagem.
+paths:
+  /avaliacoes-experiencia/elegibilidade/viagens/{tripId}:
+    get:
+      tags: [Passenger Evaluations]
+      operationId: getTripEvaluationEligibility
+      summary: Consultar elegibilidade da viagem
+      description: Confirma viagem concluida, reserva do passageiro e evidencia de embarque.
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+      responses:
+        '200':
+          description: Resultado da elegibilidade.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EligibilityResponse'}
+        '503': {$ref: '#/components/responses/ProblemResponse'}
+  /avaliacoes-experiencia/avaliacoes:
+    post:
+      tags: [Passenger Evaluations]
+      operationId: createEvaluation
+      summary: Enviar avaliacao verificada
+      description: Cria uma unica avaliacao para o passageiro autenticado e a viagem comprovada.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateEvaluationRequest'}
+      responses:
+        '201':
+          description: Avaliacao criada.
+          headers:
+            Location: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EvaluationResponse'}
+        '409': {$ref: '#/components/responses/ProblemResponse'}
+        '422': {$ref: '#/components/responses/ProblemResponse'}
+  /avaliacoes-experiencia/avaliacoes/minhas:
+    get:
+      tags: [Passenger Evaluations]
+      operationId: listMyEvaluations
+      summary: Listar minhas avaliacoes
+      description: Retorna apenas avaliacoes pertencentes ao passageiro autenticado.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: status
+          in: query
+          description: Filtra pelo estado atual.
+          schema: {$ref: '#/components/schemas/EvaluationStatus'}
+      responses:
+        '200':
+          description: Pagina de avaliacoes do passageiro.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EvaluationPage'}
+  /avaliacoes-experiencia/avaliacoes/{evaluationId}:
+    parameters:
+      - $ref: '#/components/parameters/EvaluationId'
+    get:
+      tags: [Passenger Evaluations]
+      operationId: getEvaluation
+      summary: Consultar avaliacao
+      description: Retorna o recurso somente ao proprietario ou papel autorizado.
+      responses:
+        '200':
+          description: Detalhe da avaliacao.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EvaluationResponse'}
+        '404': {$ref: '#/components/responses/ProblemResponse'}
+    patch:
+      tags: [Passenger Evaluations]
+      operationId: updateEvaluation
+      summary: Atualizar avaliacao
+      description: Atualiza conteudo dentro da janela e estados permitidos.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateEvaluationRequest'}
+      responses:
+        '200':
+          description: Avaliacao atualizada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EvaluationResponse'}
+        '409': {$ref: '#/components/responses/ProblemResponse'}
+  /avaliacoes-experiencia/avaliacoes/{evaluationId}/denuncias:
+    post:
+      tags: [Passenger Evaluations]
+      operationId: reportEvaluation
+      summary: Denunciar avaliacao ou resposta
+      description: Registra denuncia auditavel para revisao administrativa.
+      parameters:
+        - $ref: '#/components/parameters/EvaluationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReasonRequest'}
+      responses:
+        '201':
+          description: Denuncia registrada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommandResponse'}
+  /avaliacoes-experiencia/avaliacoes/{evaluationId}/anonimizar:
+    post:
+      tags: [Passenger Evaluations]
+      operationId: anonymizeEvaluation
+      summary: Anonimizar avaliacao
+      description: Remove identificadores pessoais preservando trilha minima e agregados permitidos.
+      parameters:
+        - $ref: '#/components/parameters/EvaluationId'
+      responses:
+        '200':
+          description: Avaliacao anonimizada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EvaluationResponse'}
+  /avaliacoes-experiencia/barqueiros/me/resumo:
+    get:
+      tags: [Boatman Experience]
+      operationId: getMyBoatmanSummary
+      summary: Consultar minha reputacao
+      description: Agrega somente avaliacoes verificadas publicadas do barqueiro autenticado.
+      responses:
+        '200':
+          description: Resumo de reputacao.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RatingSummary'}
+  /avaliacoes-experiencia/barqueiros/me/avaliacoes:
+    get:
+      tags: [Boatman Experience]
+      operationId: listMyBoatmanEvaluations
+      summary: Listar avaliacoes recebidas
+      description: Lista comentarios publicados sem identidade privada do passageiro.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Pagina de avaliacoes publicadas.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EvaluationPage'}
+  /avaliacoes-experiencia/barqueiros/{boatmanId}/resumo:
+    get:
+      tags: [Boatman Experience]
+      operationId: getBoatmanSummary
+      summary: Consultar reputacao publica
+      description: Retorna agregado sem PII quando houver amostra minima.
+      security: []
+      parameters:
+        - name: boatmanId
+          in: path
+          required: true
+          description: Identificador do barqueiro.
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Resumo publico.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RatingSummary'}
+  /avaliacoes-experiencia/avaliacoes/{evaluationId}/resposta:
+    post:
+      tags: [Boatman Experience]
+      operationId: respondToEvaluation
+      summary: Responder avaliacao publicada
+      description: Permite uma resposta do barqueiro relacionado a avaliacao.
+      parameters:
+        - $ref: '#/components/parameters/EvaluationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MessageRequest'}
+      responses:
+        '201':
+          description: Resposta criada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommandResponse'}
+        '409': {$ref: '#/components/responses/ProblemResponse'}
+  /avaliacoes-experiencia/avaliacoes/{evaluationId}/contestacoes:
+    post:
+      tags: [Boatman Experience]
+      operationId: contestEvaluation
+      summary: Contestar avaliacao
+      description: Abre contestacao auditavel sem alterar a nota original.
+      parameters:
+        - $ref: '#/components/parameters/EvaluationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReasonRequest'}
+      responses:
+        '201':
+          description: Contestacao criada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommandResponse'}
+  /avaliacoes-experiencia/admin/avaliacoes:
+    get:
+      tags: [Evaluation Moderation]
+      operationId: listEvaluationsForModeration
+      summary: Listar fila de moderacao
+      description: Lista avaliacoes com filtros operacionais sem busca por PII.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: status
+          in: query
+          description: Estado da fila.
+          schema: {$ref: '#/components/schemas/EvaluationStatus'}
+        - name: rating
+          in: query
+          description: Nota geral entre 1 e 5.
+          schema: {type: integer, minimum: 1, maximum: 5}
+      responses:
+        '200':
+          description: Pagina de moderacao.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EvaluationPage'}
+  /avaliacoes-experiencia/admin/avaliacoes/{evaluationId}:
+    get:
+      tags: [Evaluation Moderation]
+      operationId: getEvaluationForModeration
+      summary: Consultar item de moderacao
+      description: Retorna detalhe e sinais operacionais a papel administrativo.
+      parameters:
+        - $ref: '#/components/parameters/EvaluationId'
+      responses:
+        '200':
+          description: Detalhe administrativo.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EvaluationResponse'}
+  /avaliacoes-experiencia/admin/avaliacoes/{evaluationId}/aprovar:
+    post:
+      tags: [Evaluation Moderation]
+      operationId: approveEvaluation
+      summary: Aprovar avaliacao
+      description: Publica comentario e registra decisao, ator e instante.
+      parameters:
+        - $ref: '#/components/parameters/EvaluationId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReasonRequest'}
+      responses:
+        '200':
+          description: Avaliacao publicada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EvaluationResponse'}
+  /avaliacoes-experiencia/admin/avaliacoes/{evaluationId}/rejeitar:
+    post:
+      tags: [Evaluation Moderation]
+      operationId: rejectEvaluation
+      summary: Rejeitar avaliacao
+      description: Rejeita publicacao com motivo obrigatorio e preserva auditoria.
+      parameters:
+        - $ref: '#/components/parameters/EvaluationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReasonRequest'}
+      responses:
+        '200':
+          description: Avaliacao rejeitada.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EvaluationResponse'}
+  /avaliacoes-experiencia/admin/contestacoes/{contestId}/resolver:
+    post:
+      tags: [Evaluation Moderation]
+      operationId: resolveContest
+      summary: Resolver contestacao
+      description: Registra decisao administrativa sem apagar o historico.
+      parameters:
+        - name: contestId
+          in: path
+          required: true
+          description: Identificador da contestacao.
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ContestResolutionRequest'}
+      responses:
+        '200':
+          description: Contestacao resolvida.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommandResponse'}
+  /avaliacoes-experiencia/admin/indicadores:
+    get:
+      tags: [Evaluation Moderation]
+      operationId: getExperienceIndicators
+      summary: Consultar indicadores
+      description: Retorna satisfacao, NPS, volume e distribuicao do periodo.
+      responses:
+        '200':
+          description: Indicadores consolidados.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ExperienceIndicators'}
+  /avaliacoes-experiencia/internal/eventos/viagem-concluida:
+    post:
+      tags: [Experience Events]
+      operationId: receiveTripCompleted
+      summary: Receber conclusao de viagem
+      description: Registra evento idempotente para convite e reconciliacao de elegibilidade.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TripCompletedEvent'}
+      responses:
+        '202':
+          description: Evento aceito ou ja processado.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommandResponse'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TripId:
+      name: tripId
+      in: path
+      required: true
+      description: Identificador da viagem.
+      schema: {type: string, format: uuid}
+    EvaluationId:
+      name: evaluationId
+      in: path
+      required: true
+      description: Identificador da avaliacao.
+      schema: {type: string, format: uuid}
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Chave unica para repeticao segura do comando.
+      schema: {type: string, minLength: 8, maxLength: 100}
+    Page:
+      name: page
+      in: query
+      description: Pagina baseada em zero.
+      schema: {type: integer, minimum: 0, default: 0}
+    Size:
+      name: size
+      in: query
+      description: Quantidade por pagina.
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+  responses:
+    ProblemResponse:
+      description: Erro no formato RFC 7807.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    EvaluationStatus:
+      type: string
+      description: Estado auditavel da avaliacao.
+      enum: [SUBMITTED, UNDER_REVIEW, PUBLISHED, REJECTED, CONTESTED, ANONYMIZED]
+    ManifestationType:
+      type: string
+      description: Natureza declarada do feedback.
+      enum: [COMPLIMENT, SUGGESTION, COMPLAINT, SAFETY_REPORT]
+    Scores:
+      type: object
+      description: Notas por dimensao da experiencia.
+      required: [overall]
+      properties:
+        overall: {type: integer, minimum: 1, maximum: 5, description: Nota geral, example: 5}
+        platform: {type: integer, minimum: 1, maximum: 5, description: Experiencia na plataforma, example: 4}
+        boatman: {type: integer, minimum: 1, maximum: 5, description: Atendimento do barqueiro, example: 5}
+        vessel: {type: integer, minimum: 1, maximum: 5, description: Qualidade da embarcacao, example: 4}
+        route: {type: integer, minimum: 1, maximum: 5, description: Experiencia no trajeto, example: 4}
+        boarding: {type: integer, minimum: 1, maximum: 5, description: Embarque e organizacao, example: 3}
+        service: {type: integer, minimum: 1, maximum: 5, description: Atendimento e suporte, example: 5}
+    CreateEvaluationRequest:
+      type: object
+      required: [tripId, scores, manifestationType, anonymousPublicDisplay]
+      properties:
+        tripId: {type: string, format: uuid, description: Viagem concluida, example: 34ad4a17-9857-4c7b-846e-c0e48a9b3398}
+        scores: {$ref: '#/components/schemas/Scores'}
+        npsScore: {type: integer, minimum: 0, maximum: 10, description: Probabilidade de recomendacao, example: 9}
+        manifestationType: {$ref: '#/components/schemas/ManifestationType'}
+        comment: {type: string, maxLength: 1000, description: Comentario sem dados pessoais, example: Embarque organizado e equipe atenciosa.}
+        tags:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: Codigos do catalogo controlado.
+          items: {type: string, pattern: '^[A-Z0-9_]{2,40}$'}
+        anonymousPublicDisplay: {type: boolean, description: Oculta identidade apenas na exibicao publica, example: true}
+    UpdateEvaluationRequest:
+      type: object
+      minProperties: 1
+      properties:
+        scores: {$ref: '#/components/schemas/Scores'}
+        npsScore: {type: integer, minimum: 0, maximum: 10}
+        manifestationType: {$ref: '#/components/schemas/ManifestationType'}
+        comment: {type: string, maxLength: 1000}
+        tags: {type: array, maxItems: 10, uniqueItems: true, items: {type: string}}
+        anonymousPublicDisplay: {type: boolean}
+    EligibilityResponse:
+      type: object
+      required: [tripId, eligible, reasonCode, alreadyEvaluated]
+      properties:
+        tripId: {type: string, format: uuid, description: Viagem consultada.}
+        eligible: {type: boolean, description: Indica se o envio esta autorizado.}
+        reasonCode: {type: string, description: Codigo estavel da decisao, example: ELIGIBLE}
+        alreadyEvaluated: {type: boolean, description: Indica avaliacao ativa existente.}
+        eligibleUntil: {type: string, format: date-time, description: Fim da janela de avaliacao.}
+        bookingId: {type: string, format: uuid, description: Reserva usada como evidencia.}
+        ticketId: {type: string, format: uuid, description: Bilhete usado como evidencia de embarque.}
+    EvaluationResponse:
+      type: object
+      required: [id, tripId, scores, manifestationType, status, verifiedTrip, anonymousPublicDisplay, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid, description: Identificador da avaliacao.}
+        tripId: {type: string, format: uuid, description: Viagem avaliada.}
+        boatmanId: {type: string, format: uuid, description: Barqueiro resolvido da viagem.}
+        vesselId: {type: string, format: uuid, description: Embarcacao resolvida da viagem.}
+        routeId: {type: string, format: uuid, description: Rota resolvida da viagem.}
+        scores: {$ref: '#/components/schemas/Scores'}
+        npsScore: {type: integer, minimum: 0, maximum: 10}
+        manifestationType: {$ref: '#/components/schemas/ManifestationType'}
+        comment: {type: string, description: Comentario sanitizado conforme visibilidade.}
+        tags: {type: array, items: {type: string}}
+        status: {$ref: '#/components/schemas/EvaluationStatus'}
+        verifiedTrip: {type: boolean, description: Evidencia de participacao confirmada.}
+        anonymousPublicDisplay: {type: boolean, description: Preferencia de exibicao publica.}
+        boatmanResponse: {type: string, description: Resposta publica do barqueiro.}
+        moderationReason: {type: string, description: Motivo visivel ao ator autorizado.}
+        createdAt: {type: string, format: date-time, description: Instante de criacao.}
+        updatedAt: {type: string, format: date-time, description: Ultima alteracao.}
+    EvaluationPage:
+      type: object
+      required: [items, page, size, totalElements, totalPages]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/EvaluationResponse'}}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1}
+        totalElements: {type: integer, format: int64, minimum: 0}
+        totalPages: {type: integer, minimum: 0}
+    RatingSummary:
+      type: object
+      required: [averageRating, verifiedEvaluationCount, distribution, sampleSufficient]
+      properties:
+        averageRating: {type: number, format: double, minimum: 0, maximum: 5, description: Media geral publicada.}
+        verifiedEvaluationCount: {type: integer, format: int64, minimum: 0, description: Total verificado publicado.}
+        nps: {type: number, format: double, minimum: -100, maximum: 100, description: Net Promoter Score.}
+        distribution:
+          type: object
+          description: Quantidade por nota de 1 a 5.
+          additionalProperties: {type: integer, format: int64}
+        sampleSufficient: {type: boolean, description: Indica volume minimo para exposicao publica.}
+    ExperienceIndicators:
+      allOf:
+        - $ref: '#/components/schemas/RatingSummary'
+        - type: object
+          required: [submitted, published, rejected, underReview]
+          properties:
+            submitted: {type: integer, format: int64, minimum: 0}
+            published: {type: integer, format: int64, minimum: 0}
+            rejected: {type: integer, format: int64, minimum: 0}
+            underReview: {type: integer, format: int64, minimum: 0}
+    ReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: {type: string, minLength: 3, maxLength: 500, description: Motivo objetivo da acao, example: Conteudo contem dado pessoal.}
+    MessageRequest:
+      type: object
+      required: [message]
+      properties:
+        message: {type: string, minLength: 1, maxLength: 1000, description: Resposta publica sem PII.}
+    ContestResolutionRequest:
+      type: object
+      required: [accepted, reason]
+      properties:
+        accepted: {type: boolean, description: Indica acolhimento da contestacao.}
+        reason: {type: string, minLength: 3, maxLength: 500, description: Fundamentacao da decisao.}
+    TripCompletedEvent:
+      type: object
+      required: [eventId, tripId, completedAt]
+      properties:
+        eventId: {type: string, format: uuid, description: Identificador idempotente do evento.}
+        tripId: {type: string, format: uuid, description: Viagem concluida.}
+        completedAt: {type: string, format: date-time, description: Instante da conclusao.}
+    CommandResponse:
+      type: object
+      required: [code, correlationId, timestamp]
+      properties:
+        code: {type: string, description: Codigo estavel do resultado.}
+        message: {type: string, description: Mensagem curta para o ator.}
+        correlationId: {type: string, description: Identificador de rastreio.}
+        timestamp: {type: string, format: date-time, description: Instante da resposta.}
+        resourceId: {type: string, format: uuid, description: Recurso afetado.}
+    Problem:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type: {type: string, format: uri}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        instance: {type: string, format: uri}
+        code: {type: string}
+        correlationId: {type: string}

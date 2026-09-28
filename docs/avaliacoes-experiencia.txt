@@ -1,0 +1,175 @@
+Avaliacoes e Experiência
+
+1. Microsserviço
+
+Microsserviço:
+
+    Nome do domínio (Bounded Context):
+
+        avaliacoes-experiencia
+
+    Nome do microsserviço (repositório):
+
+        via-fluvial-api-avaliacoes-experiencia
+
+    Service Slug:
+
+        avaliacoes-experiencia
+
+Configuração de Build (pom.xml):
+
+    groupId:
+
+        br.com.viafluvial
+
+    artifactId:
+
+        api-avaliacoes-experiencia
+
+    name:
+
+        api-avaliacoes-experiencia
+
+    description:
+
+        Microsserviço responsável pelo domínio de avaliações e experiência, incluindo coleta de feedback pós-viagem, avaliação da plataforma, do barqueiro, da embarcação, do trajeto e do atendimento, gestão de comentários e sugestões, moderação de conteúdo, contestação de avaliações e consolidação de indicadores de satisfação e reputação. Implementado com Java 21 e Spring Boot, seguindo DDD, Clean Architecture e API-First (OpenAPI 3.1). Integra-se explicitamente com os microsserviços de viagens, reservas, venda de ingressos, perfis de usuários, notificações, suporte, auditoria, compliance e relatórios por meio de contratos bem definidos, garantindo avaliações verificadas, proteção dos dados pessoais, rastreabilidade, prevenção de abuso e geração de informações confiáveis para a melhoria contínua da experiência de passageiros e barqueiros.
+
+Estrutura da Aplicação:
+
+    Pacote base Java:
+
+        br.com.viafluvial.avaliacoes-experiencia
+
+API:
+
+    Versão da API:
+
+        v1
+
+    Base path:
+
+        /api/v1
+
+    Context path da aplicação:
+
+        /
+
+Execução da Aplicação em Container:
+
+    Porta interna do container (Spring Boot):
+
+        8080
+
+    Porta exposta no host (cluster):
+
+        <PORT> (bloco reservado 18001 – 18xx)
+
+    Modo de publicação da porta (Docker Swarm):
+
+        host
+
+Ambiente de Execução:
+
+    Ambientes suportados:
+
+        dsv
+
+        hml
+
+        prd
+
+Conectividade da Aplicação:
+
+    Host interno (dentro do cluster Swarm):
+
+        api-avaliacoes-experiencia
+
+    Porta interna:
+
+        8080
+
+    Host externo (acesso via API Gateway):
+
+        api-gateway.prd.viafluvial.com.br
+
+    Endpoint externo (Gateway – público):
+
+        https://api-gateway.prd.viafluvial.com.br/api/v1/avaliacoes-experiencia/{id}
+
+    Endpoint interno (Backend – rede interna):
+
+        https://api-avaliacoes-experiencia.prd.viafluvial.com.br/api/v1/avaliacoes-experiencia/{id}
+
+Identidade do Serviço:
+
+    Nome lógico do serviço (service.name):
+
+        api-avaliacoes-experiencia
+
+    Namespace / Domínio organizacional:
+
+        viafluvial
+
+2. Banco de Dados
+
+Microsserviço:
+
+    Engine:
+
+        PostgreSQL
+
+    Modelo de Persistência:
+
+        Banco de dados dedicado por microsserviço (1:1)
+
+    Nome do banco de dados:
+
+        db-avaliacoes-experiencia
+
+    Usuário do banco:
+
+        avaliacoes-experiencia_app
+
+    Schema:
+
+        sc-avaliacoes-experiencia 
+
+Execução em Container:
+
+    Nome do container do banco:
+
+        postgres-avaliacoes-experiencia
+
+    Porta interna do container (PostgreSQL):
+
+        5432
+
+    Porta exposta no host (cluster):
+
+        <DB_PORT> (bloco reservado 15432 – 154xx)
+
+    Modo de publicação da porta (Docker Swarm):
+
+        host
+
+Conectividade:
+
+    Host interno (dentro do cluster Swarm):
+
+        postgres-avaliacoes-experiencia
+
+    Porta interna:
+
+        5432
+
+    Host externo (acesso inter-cluster, quando aplicável):
+
+        <NODE_IP | LB_DNS>
+
+    Porta externa:
+
+        <DB_PORT>
+
+    URL JDBC (resolvida por variáveis de ambiente):
+
+        jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}

@@ -1,0 +1,50 @@
+services:
+  postgres-avaliacoes-experiencia:
+    image: postgres:16
+    container_name: postgres-avaliacoes-experiencia
+    environment:
+      POSTGRES_DB: db-avaliacoes-experiencia
+      POSTGRES_USER: avaliacoes-experiencia_app
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-avaliacoes-experiencia_app}
+    ports:
+      - "${DB_PORT_EXTERNAL:-15452}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U avaliacoes-experiencia_app -d db-avaliacoes-experiencia"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - avaliacoes-experiencia-postgres:/var/lib/postgresql/data
+
+  api-avaliacoes-experiencia:
+    build: .
+    container_name: api-avaliacoes-experiencia
+    depends_on:
+      postgres-avaliacoes-experiencia:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: dsv
+      DB_HOST: postgres-avaliacoes-experiencia
+      DB_PORT: 5432
+      DB_NAME: db-avaliacoes-experiencia
+      DB_SCHEMA: sc-avaliacoes-experiencia
+      DB_USERNAME: avaliacoes-experiencia_app
+      DB_PASSWORD: ${DB_PASSWORD:-avaliacoes-experiencia_app}
+      INTEGRATIONS_TRIPS_BASE_URL: ${TRIPS_BASE_URL:-http://host.docker.internal:18008/api/v1}
+      INTEGRATIONS_BOOKINGS_BASE_URL: ${BOOKINGS_BASE_URL:-http://host.docker.internal:18009/api/v1}
+      INTEGRATIONS_TICKETS_BASE_URL: ${TICKETS_BASE_URL:-http://host.docker.internal:18010/api/v1}
+      INTEGRATIONS_SERVICE_TOKEN: ${INTEGRATIONS_SERVICE_TOKEN:-}
+      OUTBOX_ENABLED: ${OUTBOX_ENABLED:-false}
+      OUTBOX_DELIVERY_URL: ${OUTBOX_DELIVERY_URL:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${API_PORT_EXTERNAL:-18021}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v1/actuator/health/readiness >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  avaliacoes-experiencia-postgres:
