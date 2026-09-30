@@ -5,7 +5,7 @@ info:
   description: API responsavel por avaliacoes e experiencia, incluindo coleta de feedback pos-viagem, moderacao e indicadores de satisfacao.
 servers:
   - url: /avaliacoes-experiencia/api/v1
-    description: Runtime de Desenvolvimento
+    description: Entrypoint padrao no API Gateway (Gravitee).
   - url: https://api-avaliacoes-experiencia.hml.viafluvial.com.br/api/v1
     description: Runtime de Homologacao
   - url: https://api-avaliacoes-experiencia.prd.viafluvial.com.br/api/v1
