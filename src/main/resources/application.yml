@@ -70,6 +70,16 @@ app:
     batch-size: ${OUTBOX_BATCH_SIZE:25}
     max-attempts: ${OUTBOX_MAX_ATTEMPTS:6}
 
+platform:
+  security:
+    mode: ${security.mode:oauth2}
+    jwk-set-uri: ${PLATFORM_JWT_JWK_SET_URI:}
+    issuer: ${PLATFORM_JWT_ISSUER:}
+    audience: ${PLATFORM_JWT_AUDIENCE:via-fluvial-platform}
+    service-token: ${PLATFORM_SERVICE_TOKEN:}
+    service-name: api-avaliacoes-experiencia
+    boatman-scoped: false
+
 ---
 spring:
   config:

@@ -1,5 +1,8 @@
 package br.com.viafluvial.avaliacoesexperiencia.config;
 
+import br.com.viafluvial.avaliacoesexperiencia.platformsecurity.PlatformHeaderAuthenticationFilter;
+import br.com.viafluvial.avaliacoesexperiencia.platformsecurity.PlatformSecurity;
+import br.com.viafluvial.avaliacoesexperiencia.platformsecurity.PlatformSecurityProperties;
 import java.util.Arrays;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,9 +37,18 @@ public class SecurityConfig {
 
     @Bean
     @Profile({"hml", "prd"})
-    SecurityFilterChain jwtSecurity(HttpSecurity http) throws Exception {
-        return base(http).authorizeHttpRequests(auth -> auth.requestMatchers(PUBLIC).permitAll()
-                .anyRequest().authenticated()).oauth2ResourceServer(server -> server.jwt(Customizer.withDefaults())).build();
+    SecurityFilterChain jwtSecurity(HttpSecurity http, PlatformSecurityProperties platformSecurity) throws Exception {
+        base(http).authorizeHttpRequests(auth -> auth.requestMatchers(PUBLIC).permitAll()
+                .anyRequest().authenticated())
+                // Platform tokens verified by PlatformIdentityFilter authenticate through their trusted headers.
+                .addFilterBefore(PlatformSecurity.verifiedOnly(new PlatformHeaderAuthenticationFilter()),
+                        org.springframework.security.web.authentication.AnonymousAuthenticationFilter.class);
+        if (platformSecurity.enforced()) {
+            PlatformSecurity.configureEntryPoint(http, platformSecurity.mode());
+        } else {
+            http.oauth2ResourceServer(server -> server.jwt(Customizer.withDefaults()));
+        }
+        return http.build();
     }
 
     private HttpSecurity base(HttpSecurity http) throws Exception {

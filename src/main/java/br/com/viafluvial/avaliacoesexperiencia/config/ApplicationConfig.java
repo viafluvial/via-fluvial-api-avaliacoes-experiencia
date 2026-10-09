@@ -1,5 +1,6 @@
 package br.com.viafluvial.avaliacoesexperiencia.config;
 
+import br.com.viafluvial.avaliacoesexperiencia.platformsecurity.PlatformOutboundAuthInterceptor;
 import java.time.Clock;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,8 +20,9 @@ public class ApplicationConfig {
 
     @Bean
     RestClient.Builder restClientBuilder(
-            @Value("${integrations.service-token:}") String serviceToken) {
-        return RestClient.builder().requestInterceptor((request, body, execution) -> {
+            @Value("${integrations.service-token:}") String serviceToken,
+            PlatformOutboundAuthInterceptor platformOutboundAuth) {
+        return RestClient.builder().requestInterceptor(platformOutboundAuth).requestInterceptor((request, body, execution) -> {
             String correlationId = MDC.get("correlationId");
             if (correlationId != null && !correlationId.isBlank()) {
                 request.getHeaders().set(CorrelationIdFilter.HEADER, correlationId);
