@@ -2,6 +2,7 @@ package br.com.viafluvial.avaliacoesexperiencia.adapters.out.persistence;
 
 import br.com.viafluvial.avaliacoesexperiencia.adapters.out.persistence.entity.EvaluationEntity;
 import br.com.viafluvial.avaliacoesexperiencia.adapters.out.persistence.repository.EvaluationJpaRepository;
+import br.com.viafluvial.avaliacoesexperiencia.application.model.BoatmanRating;
 import br.com.viafluvial.avaliacoesexperiencia.application.model.PageResult;
 import br.com.viafluvial.avaliacoesexperiencia.application.port.out.EvaluationRepositoryPort;
 import br.com.viafluvial.avaliacoesexperiencia.domain.model.EvaluationScore;
@@ -12,10 +13,13 @@ import br.com.viafluvial.avaliacoesexperiencia.domain.model.ManifestationType;
 import br.com.viafluvial.avaliacoesexperiencia.domain.model.NpsScore;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
 
@@ -72,6 +76,26 @@ public class EvaluationPersistenceAdapter implements EvaluationRepositoryPort {
     @Override public long countPublished() { return repository.countPublished(); }
     @Override public long countPublishedByRating(int rating) { return repository.countPublishedByRating(rating); }
     @Override public Double averagePublishedNps() { return repository.averagePublishedNps(); }
+
+    @Override
+    public List<BoatmanRating> summarizePublishedByBoatmen(Collection<UUID> boatmanIds) {
+        if (boatmanIds == null || boatmanIds.isEmpty()) return List.of();
+        return repository.summarizePublishedByBoatmen(boatmanIds).stream()
+                .map(row -> new BoatmanRating((UUID) row[0], ((Number) row[1]).doubleValue(), ((Number) row[2]).longValue()))
+                .toList();
+    }
+
+    @Override
+    public List<ExperienceEvaluation> findPublishedTestimonials(int minScore, int minCommentLength, int limit) {
+        Specification<EvaluationEntity> specification = (root, query, cb) -> cb.and(
+                cb.equal(root.get("status"), EvaluationStatus.PUBLISHED),
+                cb.greaterThanOrEqualTo(root.get("overallScore"), minScore),
+                cb.isNotNull(root.get("comment")),
+                cb.greaterThanOrEqualTo(cb.length(cb.trim(root.get("comment"))), minCommentLength));
+        return repository.findAll(specification, PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "updatedAt")))
+                .map(this::toDomain)
+                .getContent();
+    }
 
     private PageResult<ExperienceEvaluation> query(int page, int size, Specification<EvaluationEntity> specification) {
         Page<EvaluationEntity> result = repository.findAll(specification, PageRequest.of(page, size));

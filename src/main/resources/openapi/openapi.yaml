@@ -190,6 +190,49 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/RatingSummary'}
+  /avaliacoes-experiencia/barqueiros/resumos:
+    get:
+      tags: [Boatman Experience]
+      operationId: listBoatmanSummaries
+      summary: Consultar reputacao publica de varios barqueiros
+      description: Retorna media e quantidade de avaliacoes publicadas por barqueiro, sem PII, para vitrines.
+      security: []
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          description: Identificadores dos barqueiros separados por virgula (maximo 50).
+          style: form
+          explode: false
+          schema:
+            type: array
+            maxItems: 50
+            items: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Resumos publicos.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BoatmanSummaryList'}
+  /avaliacoes-experiencia/depoimentos:
+    get:
+      tags: [Boatman Experience]
+      operationId: listPublicTestimonials
+      summary: Listar depoimentos publicados
+      description: Comentarios de avaliacoes verificadas e publicadas pela moderacao, sem identificar o passageiro.
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Quantidade maxima de depoimentos.
+          schema: {type: integer, minimum: 1, maximum: 12, default: 6}
+      responses:
+        '200':
+          description: Depoimentos publicos.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TestimonialList'}
   /avaliacoes-experiencia/avaliacoes/{evaluationId}/resposta:
     post:
       tags: [Boatman Experience]
@@ -487,6 +530,40 @@ components:
         size: {type: integer, minimum: 1}
         totalElements: {type: integer, format: int64, minimum: 0}
         totalPages: {type: integer, minimum: 0}
+    BoatmanSummaryItem:
+      type: object
+      required: [boatmanId, averageRating, verifiedEvaluationCount, sampleSufficient]
+      properties:
+        boatmanId: {type: string, format: uuid, description: Identificador do barqueiro.}
+        averageRating: {type: number, format: double, minimum: 0, maximum: 5, description: Media geral publicada.}
+        verifiedEvaluationCount: {type: integer, format: int64, minimum: 0, description: Total verificado publicado.}
+        sampleSufficient: {type: boolean, description: Indica volume minimo para exposicao publica.}
+    BoatmanSummaryList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/BoatmanSummaryItem'}
+    Testimonial:
+      type: object
+      required: [evaluationId, rating, comment, publishedAt]
+      properties:
+        evaluationId: {type: string, format: uuid, description: Identificador da avaliacao.}
+        rating: {type: integer, minimum: 1, maximum: 5, description: Nota geral.}
+        comment: {type: string, description: Comentario publicado.}
+        publishedAt: {type: string, format: date-time, description: Data da ultima atualizacao publicada.}
+        tags:
+          type: array
+          description: Marcadores escolhidos pelo passageiro.
+          items: {type: string}
+    TestimonialList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/Testimonial'}
     RatingSummary:
       type: object
       required: [averageRating, verifiedEvaluationCount, distribution, sampleSufficient]

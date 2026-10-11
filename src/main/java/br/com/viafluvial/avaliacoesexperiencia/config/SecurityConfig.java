@@ -24,7 +24,9 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC = {
         "/actuator/health/**", "/v3/api-docs/**", "/openapi/**", "/swagger-ui/**",
-        "/avaliacoes-experiencia/barqueiros/*/resumo"
+        "/avaliacoes-experiencia/barqueiros/*/resumo",
+        "/avaliacoes-experiencia/barqueiros/resumos",
+        "/avaliacoes-experiencia/depoimentos"
     };
 
     @Bean

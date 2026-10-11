@@ -1,6 +1,13 @@
 package br.com.viafluvial.avaliacoesexperiencia.adapters.in.web;
 
 import br.com.viafluvial.avaliacoesexperiencia.adapters.in.web.generated.api.BoatmanExperienceApi;
+import br.com.viafluvial.avaliacoesexperiencia.adapters.in.web.generated.dto.BoatmanSummaryItem;
+import br.com.viafluvial.avaliacoesexperiencia.adapters.in.web.generated.dto.BoatmanSummaryList;
+import br.com.viafluvial.avaliacoesexperiencia.adapters.in.web.generated.dto.Testimonial;
+import br.com.viafluvial.avaliacoesexperiencia.adapters.in.web.generated.dto.TestimonialList;
+import java.time.Duration;
+import java.util.List;
+import org.springframework.http.CacheControl;
 import br.com.viafluvial.avaliacoesexperiencia.adapters.in.web.generated.dto.CommandResponse;
 import br.com.viafluvial.avaliacoesexperiencia.adapters.in.web.generated.dto.EvaluationPage;
 import br.com.viafluvial.avaliacoesexperiencia.adapters.in.web.generated.dto.MessageRequest;
@@ -27,6 +34,21 @@ public class BoatmanExperienceController implements BoatmanExperienceApi {
     }
 
     @Override public ResponseEntity<RatingSummary> getBoatmanSummary(UUID boatmanId) { return ResponseEntity.ok(summary(boatmanId)); }
+    @Override public ResponseEntity<BoatmanSummaryList> listBoatmanSummaries(List<UUID> ids) {
+        var items = service.summaries(ids).stream()
+                .map(rating -> new BoatmanSummaryItem(rating.boatmanId(), rating.average(), rating.count(), rating.sampleSufficient()))
+                .toList();
+        return ResponseEntity.ok().cacheControl(CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic())
+                .body(new BoatmanSummaryList(items));
+    }
+    @Override public ResponseEntity<TestimonialList> listPublicTestimonials(Integer limit) {
+        var items = service.testimonials(limit).stream()
+                .map(evaluation -> new Testimonial(evaluation.id(), evaluation.scores().overall().value(),
+                        evaluation.comment().trim(), evaluation.updatedAt()).tags(evaluation.tags()))
+                .toList();
+        return ResponseEntity.ok().cacheControl(CacheControl.maxAge(Duration.ofMinutes(10)).cachePublic())
+                .body(new TestimonialList(items));
+    }
     @Override @PreAuthorize("hasRole('GESTOR')") public ResponseEntity<RatingSummary> getMyBoatmanSummary() { return ResponseEntity.ok(summary(actor.id())); }
     @Override @PreAuthorize("hasRole('GESTOR')") public ResponseEntity<EvaluationPage> listMyBoatmanEvaluations(Integer page, Integer size) { return ResponseEntity.ok(mapper.toPage(service.list(actor.id(), page, size))); }
     @Override @PreAuthorize("hasRole('GESTOR')") public ResponseEntity<CommandResponse> respondToEvaluation(UUID id, MessageRequest request) {

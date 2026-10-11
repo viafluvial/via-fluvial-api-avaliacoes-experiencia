@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import br.com.viafluvial.avaliacoesexperiencia.application.model.BoatmanRating;
 import br.com.viafluvial.avaliacoesexperiencia.application.model.PageResult;
 import br.com.viafluvial.avaliacoesexperiencia.application.port.out.EvaluationRepositoryPort;
 import br.com.viafluvial.avaliacoesexperiencia.application.port.out.OutboxPort;
@@ -66,6 +67,36 @@ class BoatmanExperienceServiceTest {
     void leavesNpsAbsentForEmptySample() {
         when(repository.averagePublishedNpsByBoatman(boatmanId)).thenReturn(null);
         assertThat(service.summary(boatmanId).nps()).isNull();
+    }
+
+    @Test
+    void summarizesRequestedBoatmenKeepingOrderAndZeroingMissing() {
+        UUID other = UUID.randomUUID();
+        when(repository.summarizePublishedByBoatmen(List.of(boatmanId, other)))
+                .thenReturn(List.of(new BoatmanRating(boatmanId, 4.7, 12)));
+
+        var summaries = service.summaries(java.util.Arrays.asList(boatmanId, null, other, boatmanId));
+
+        assertThat(summaries).extracting(BoatmanRating::boatmanId).containsExactly(boatmanId, other);
+        assertThat(summaries.get(0).sampleSufficient()).isTrue();
+        assertThat(summaries.get(1).count()).isZero();
+        assertThat(summaries.get(1).sampleSufficient()).isFalse();
+        assertThat(service.summaries(null)).isEmpty();
+        assertThat(service.summaries(List.of())).isEmpty();
+    }
+
+    @Test
+    void listsTestimonialsWithClampedLimit() {
+        var evaluation = publishedEvaluation();
+        when(repository.findPublishedTestimonials(4, 20, 6)).thenReturn(List.of(evaluation));
+        when(repository.findPublishedTestimonials(4, 20, 12)).thenReturn(List.of());
+        when(repository.findPublishedTestimonials(4, 20, 1)).thenReturn(List.of());
+
+        assertThat(service.testimonials(null)).containsExactly(evaluation);
+        assertThat(service.testimonials(99)).isEmpty();
+        assertThat(service.testimonials(0)).isEmpty();
+        verify(repository).findPublishedTestimonials(4, 20, 12);
+        verify(repository).findPublishedTestimonials(4, 20, 1);
     }
 
     private ExperienceEvaluation publishedEvaluation() {

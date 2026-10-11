@@ -14,6 +14,9 @@ public interface EvaluationJpaRepository extends JpaRepository<EvaluationEntity,
     Optional<EvaluationEntity> findFirstByPassengerIdAndIdempotencyKey(UUID passengerId, String idempotencyKey);
     long countByStatus(EvaluationStatus status);
 
+    @Query("select e.boatmanId, coalesce(avg(e.overallScore), 0), count(e) from EvaluationEntity e "
+            + "where e.status = 'PUBLISHED' and e.boatmanId in :boatmanIds group by e.boatmanId")
+    java.util.List<Object[]> summarizePublishedByBoatmen(@Param("boatmanIds") java.util.Collection<UUID> boatmanIds);
     @Query("select coalesce(avg(e.overallScore), 0) from EvaluationEntity e where e.boatmanId = :boatmanId and e.status = 'PUBLISHED'")
     double averagePublishedByBoatman(@Param("boatmanId") UUID boatmanId);
     @Query("select count(e) from EvaluationEntity e where e.boatmanId = :boatmanId and e.status = 'PUBLISHED'")

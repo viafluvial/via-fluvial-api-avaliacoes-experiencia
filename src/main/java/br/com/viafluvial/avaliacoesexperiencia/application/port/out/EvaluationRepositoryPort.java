@@ -1,8 +1,11 @@
 package br.com.viafluvial.avaliacoesexperiencia.application.port.out;
 
+import br.com.viafluvial.avaliacoesexperiencia.application.model.BoatmanRating;
 import br.com.viafluvial.avaliacoesexperiencia.application.model.PageResult;
 import br.com.viafluvial.avaliacoesexperiencia.domain.model.EvaluationStatus;
 import br.com.viafluvial.avaliacoesexperiencia.domain.model.ExperienceEvaluation;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,4 +26,6 @@ public interface EvaluationRepositoryPort {
     long countPublished();
     long countPublishedByRating(int rating);
     Double averagePublishedNps();
+    List<BoatmanRating> summarizePublishedByBoatmen(Collection<UUID> boatmanIds);
+    List<ExperienceEvaluation> findPublishedTestimonials(int minScore, int minCommentLength, int limit);
 }
