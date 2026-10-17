@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import br.com.viafluvial.avaliacoesexperiencia.domain.model.TargetType;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +23,9 @@ public class EvaluationEntity {
 
     @Id
     private UUID id;
+    @Enumerated(EnumType.STRING)
+    private TargetType targetType = TargetType.TRIP;
+    private UUID shipmentId;
     private UUID tripId;
     private UUID passengerId;
     private UUID bookingId;
@@ -36,6 +40,9 @@ public class EvaluationEntity {
     private Integer routeScore;
     private Integer boardingScore;
     private Integer serviceScore;
+    private Short scorePunctuality;
+    private Short scoreCargoCare;
+    private Short scoreFreightService;
     private Integer npsScore;
     private String manifestationType;
     @Column(length = 1000)
@@ -62,6 +69,16 @@ public class EvaluationEntity {
 
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
+    public TargetType getTargetType() { return targetType; }
+    public void setTargetType(TargetType targetType) { this.targetType = targetType; }
+    public UUID getShipmentId() { return shipmentId; }
+    public void setShipmentId(UUID shipmentId) { this.shipmentId = shipmentId; }
+    public Short getScorePunctuality() { return scorePunctuality; }
+    public void setScorePunctuality(Short scorePunctuality) { this.scorePunctuality = scorePunctuality; }
+    public Short getScoreCargoCare() { return scoreCargoCare; }
+    public void setScoreCargoCare(Short scoreCargoCare) { this.scoreCargoCare = scoreCargoCare; }
+    public Short getScoreFreightService() { return scoreFreightService; }
+    public void setScoreFreightService(Short scoreFreightService) { this.scoreFreightService = scoreFreightService; }
     public UUID getTripId() { return tripId; }
     public void setTripId(UUID tripId) { this.tripId = tripId; }
     public UUID getPassengerId() { return passengerId; }

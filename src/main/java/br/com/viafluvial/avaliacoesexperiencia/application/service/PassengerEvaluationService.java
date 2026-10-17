@@ -48,7 +48,13 @@ public class PassengerEvaluationService {
     public ExperienceEvaluation create(CreateEvaluationCommand command) {
         if (command.idempotencyKey() != null && !command.idempotencyKey().isBlank()) {
             var existing = repository.findByIdempotencyKey(command.passengerId(), command.idempotencyKey());
-            if (existing.isPresent()) return existing.get();
+            if (existing.isPresent()) {
+                if (existing.get().isFreight()) {
+                    throw new EvaluationConflictException("Idempotency key already used for another evaluation",
+                            "IDEMPOTENCY_KEY_REUSED");
+                }
+                return existing.get();
+            }
         }
         if (repository.findActiveByPassengerAndTrip(command.passengerId(), command.tripId()).isPresent()) {
             throw new EvaluationConflictException("Passenger already evaluated this trip");

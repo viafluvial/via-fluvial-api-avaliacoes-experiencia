@@ -15,4 +15,12 @@ public class AuthenticatedActor {
         String value = principal instanceof Jwt jwt ? jwt.getSubject() : authentication.getName();
         return UUID.fromString(value);
     }
+
+    /** True when the current authentication holds ROLE_{role}. */
+    public boolean hasRole(String role) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) return false;
+        String expected = "ROLE_" + role;
+        return authentication.getAuthorities().stream().anyMatch(authority -> expected.equals(authority.getAuthority()));
+    }
 }

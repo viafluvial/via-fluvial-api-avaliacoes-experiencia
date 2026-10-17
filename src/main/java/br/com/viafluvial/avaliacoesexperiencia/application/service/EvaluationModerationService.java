@@ -6,6 +6,7 @@ import br.com.viafluvial.avaliacoesexperiencia.application.port.out.OutboxPort;
 import br.com.viafluvial.avaliacoesexperiencia.domain.exception.EvaluationNotFoundException;
 import br.com.viafluvial.avaliacoesexperiencia.domain.model.EvaluationStatus;
 import br.com.viafluvial.avaliacoesexperiencia.domain.model.ExperienceEvaluation;
+import br.com.viafluvial.avaliacoesexperiencia.domain.model.TargetType;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -35,6 +36,13 @@ public class EvaluationModerationService {
         return repository.findForModeration(status, rating, page, size);
     }
 
+    /** Moderation queue filtered by kind; a null targetType lists TRIP and FREIGHT evaluations. */
+    @Transactional(readOnly = true)
+    public PageResult<ExperienceEvaluation> list(EvaluationStatus status, Integer rating, TargetType targetType,
+            int page, int size) {
+        return repository.findForModeration(status, rating, targetType, page, size);
+    }
+
     @Transactional(readOnly = true)
     public ExperienceEvaluation get(UUID id) {
         return repository.findById(id).orElseThrow(() -> new EvaluationNotFoundException("Evaluation not found"));
@@ -45,7 +53,9 @@ public class EvaluationModerationService {
         var evaluation = get(id);
         evaluation.publish(reason, now());
         var saved = repository.save(evaluation);
-        outbox.append("EVALUATION_PUBLISHED", id, Map.of("evaluationId", id));
+        outbox.append("EVALUATION_PUBLISHED", id, evaluation.isFreight()
+                ? Map.of("evaluationId", id, "targetType", TargetType.FREIGHT.name(), "shipmentId", evaluation.shipmentId())
+                : Map.of("evaluationId", id));
         return saved;
     }
 
@@ -54,7 +64,10 @@ public class EvaluationModerationService {
         var evaluation = get(id);
         evaluation.reject(reason, now());
         var saved = repository.save(evaluation);
-        outbox.append("EVALUATION_REJECTED", id, Map.of("evaluationId", id, "reason", reason));
+        outbox.append("EVALUATION_REJECTED", id, evaluation.isFreight()
+                ? Map.of("evaluationId", id, "reason", reason, "targetType", TargetType.FREIGHT.name(),
+                        "shipmentId", evaluation.shipmentId())
+                : Map.of("evaluationId", id, "reason", reason));
         return saved;
     }
 
