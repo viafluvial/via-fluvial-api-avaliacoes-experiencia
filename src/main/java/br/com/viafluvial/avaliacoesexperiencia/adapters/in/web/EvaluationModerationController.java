@@ -25,9 +25,11 @@ public class EvaluationModerationController implements EvaluationModerationApi {
     @Override @PreAuthorize("hasRole('ADMINISTRADOR')") public ResponseEntity<EvaluationResponse> approveEvaluation(UUID id, ReasonRequest request) { return ResponseEntity.ok(mapper.toResponse(service.approve(id, request == null ? null : request.getReason()))); }
     @Override @PreAuthorize("hasRole('ADMINISTRADOR')") public ResponseEntity<EvaluationResponse> rejectEvaluation(UUID id, ReasonRequest request) { return ResponseEntity.ok(mapper.toResponse(service.reject(id, request.getReason()))); }
     @Override @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPORTE','AUDITOR')") public ResponseEntity<EvaluationResponse> getEvaluationForModeration(UUID id) { return ResponseEntity.ok(mapper.toResponse(service.get(id))); }
-    @Override @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPORTE','AUDITOR')") public ResponseEntity<EvaluationPage> listEvaluationsForModeration(Integer page, Integer size, EvaluationStatus status, Integer rating) {
+    @Override @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPORTE','AUDITOR')") public ResponseEntity<EvaluationPage> listEvaluationsForModeration(Integer page, Integer size, EvaluationStatus status, Integer rating,
+            br.com.viafluvial.avaliacoesexperiencia.adapters.in.web.generated.dto.TargetType targetType) {
         var domainStatus = status == null ? null : br.com.viafluvial.avaliacoesexperiencia.domain.model.EvaluationStatus.valueOf(status.name());
-        return ResponseEntity.ok(mapper.toPage(service.list(domainStatus, rating, page, size)));
+        // Without targetType the queue lists TRIP and FREIGHT evaluations, so freight ratings can be moderated too.
+        return ResponseEntity.ok(mapper.toPage(service.list(domainStatus, rating, mapper.toDomain(targetType), page, size)));
     }
     @Override @PreAuthorize("hasAnyRole('ADMINISTRADOR','SUPORTE','AUDITOR')") public ResponseEntity<ExperienceIndicators> getExperienceIndicators() {
         var value = service.indicators(); var distribution = new LinkedHashMap<String, Long>();

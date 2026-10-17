@@ -51,6 +51,8 @@ springdoc:
     urls-primary-name: OpenAPI (runtime - JSON)
 evaluation:
   window-days: ${EVALUATION_WINDOW_DAYS:30}
+  # Janela de avaliacao do frete entregue (contrato: 30 dias apos deliveredAt).
+  freight-window-days: ${FREIGHT_EVALUATION_WINDOW_DAYS:30}
 integrations:
   service-token: ${INTEGRATIONS_SERVICE_TOKEN:}
   outbox:
