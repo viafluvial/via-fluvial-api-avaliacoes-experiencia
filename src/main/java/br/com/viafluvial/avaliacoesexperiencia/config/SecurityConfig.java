@@ -29,10 +29,17 @@ public class SecurityConfig {
         "/avaliacoes-experiencia/depoimentos"
     };
 
+    /** New internal endpoints called by api-fretes-cargas: platform service credential (ROLE_SERVICE) only. */
+    static final String[] INTERNAL_SERVICE = {
+        "/avaliacoes-experiencia/internal/eventos/frete-entregue",
+        "/avaliacoes-experiencia/internal/avaliacoes-frete"
+    };
+
     @Bean
     @Profile("dsv")
     SecurityFilterChain dsvSecurity(HttpSecurity http, DevAuthenticationFilter filter) throws Exception {
-        return base(http).authorizeHttpRequests(auth -> auth.requestMatchers(PUBLIC).permitAll()
+        return base(http).authorizeHttpRequests(auth -> auth.requestMatchers(INTERNAL_SERVICE).hasRole("SERVICE")
+                .requestMatchers(PUBLIC).permitAll()
                 .anyRequest().authenticated()).addFilterBefore(filter,
                         org.springframework.security.web.authentication.AnonymousAuthenticationFilter.class).build();
     }
@@ -40,7 +47,8 @@ public class SecurityConfig {
     @Bean
     @Profile({"hml", "prd"})
     SecurityFilterChain jwtSecurity(HttpSecurity http, PlatformSecurityProperties platformSecurity) throws Exception {
-        base(http).authorizeHttpRequests(auth -> auth.requestMatchers(PUBLIC).permitAll()
+        base(http).authorizeHttpRequests(auth -> auth.requestMatchers(INTERNAL_SERVICE).hasRole("SERVICE")
+                .requestMatchers(PUBLIC).permitAll()
                 .anyRequest().authenticated())
                 // Platform tokens verified by PlatformIdentityFilter authenticate through their trusted headers.
                 .addFilterBefore(PlatformSecurity.verifiedOnly(new PlatformHeaderAuthenticationFilter()),

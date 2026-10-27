@@ -24,6 +24,7 @@
         <openapi-generator.version>7.10.0</openapi-generator.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <testcontainers.version>1.21.3</testcontainers.version>
+        <datasource-micrometer.version>1.2.0</datasource-micrometer.version>
     </properties>
 
     <dependencies>
@@ -76,6 +77,16 @@
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+        <dependency>
+            <!-- Spans das consultas SQL dentro do trace distribuido (OpenTelemetry -> Coroot). -->
+            <groupId>net.ttddyy.observation</groupId>
+            <artifactId>datasource-micrometer-spring-boot</artifactId>
+            <version>${datasource-micrometer.version}</version>
         </dependency>
         <dependency>
             <groupId>org.mapstruct</groupId>

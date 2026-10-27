@@ -1,11 +1,13 @@
 package br.com.viafluvial.avaliacoesexperiencia.application.service;
 
 import br.com.viafluvial.avaliacoesexperiencia.application.model.BoatmanRating;
+import br.com.viafluvial.avaliacoesexperiencia.application.model.FreightCriteriaAverages;
 import br.com.viafluvial.avaliacoesexperiencia.application.model.PageResult;
 import br.com.viafluvial.avaliacoesexperiencia.application.port.out.EvaluationRepositoryPort;
 import br.com.viafluvial.avaliacoesexperiencia.application.port.out.OutboxPort;
 import br.com.viafluvial.avaliacoesexperiencia.domain.exception.EvaluationNotFoundException;
 import br.com.viafluvial.avaliacoesexperiencia.domain.model.ExperienceEvaluation;
+import br.com.viafluvial.avaliacoesexperiencia.domain.model.TargetType;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
@@ -20,7 +22,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class BoatmanExperienceService {
 
-    public record Summary(double average, long count, Double nps, Map<Integer, Long> distribution, boolean sampleSufficient) {}
+    /**
+     * Rating summary of one kind of evaluation. {@code criteria} is filled only for FREIGHT summaries
+     * (averages of punctuality, cargo care and service); TRIP summaries keep their historical content.
+     */
+    public record Summary(double average, long count, Double nps, Map<Integer, Long> distribution, boolean sampleSufficient,
+            TargetType targetType, FreightCriteriaAverages criteria) {
+        public Summary(double average, long count, Double nps, Map<Integer, Long> distribution, boolean sampleSufficient) {
+            this(average, count, nps, distribution, sampleSufficient, TargetType.TRIP, null);
+        }
+    }
 
     public static final int MAX_SUMMARY_IDS = 50;
     public static final int DEFAULT_TESTIMONIALS = 6;
@@ -49,9 +60,30 @@ public class BoatmanExperienceService {
                 toNps(repository.averagePublishedNpsByBoatman(boatmanId)), distribution, count >= 3);
     }
 
+    /** Summary of the requested kind; TRIP (default) is exactly {@link #summary(UUID)}. */
+    @Transactional(readOnly = true)
+    public Summary summary(UUID boatmanId, TargetType targetType) {
+        if (TargetType.orDefault(targetType) == TargetType.TRIP) return summary(boatmanId);
+        Map<Integer, Long> distribution = new LinkedHashMap<>();
+        for (int rating = 1; rating <= 5; rating++) {
+            distribution.put(rating, repository.countPublishedByBoatmanAndRating(boatmanId, TargetType.FREIGHT, rating));
+        }
+        long count = repository.countPublishedByBoatman(boatmanId, TargetType.FREIGHT);
+        FreightCriteriaAverages criteria = repository.averagePublishedFreightCriteriaByBoatman(boatmanId);
+        return new Summary(repository.averagePublishedByBoatman(boatmanId, TargetType.FREIGHT), count, null,
+                distribution, count >= 3, TargetType.FREIGHT, criteria == null ? FreightCriteriaAverages.empty() : criteria);
+    }
+
     @Transactional(readOnly = true)
     public PageResult<ExperienceEvaluation> list(UUID boatmanId, int page, int size) {
         return repository.findPublishedByBoatman(boatmanId, page, size);
+    }
+
+    /** Published evaluations of the requested kind; TRIP (default) is exactly {@link #list(UUID, int, int)}. */
+    @Transactional(readOnly = true)
+    public PageResult<ExperienceEvaluation> list(UUID boatmanId, TargetType targetType, int page, int size) {
+        if (TargetType.orDefault(targetType) == TargetType.TRIP) return list(boatmanId, page, size);
+        return repository.findPublishedByBoatman(boatmanId, TargetType.FREIGHT, page, size);
     }
 
     /** Public aggregate per requested boatman (zeroed when there is no published evaluation). */
@@ -77,7 +109,10 @@ public class BoatmanExperienceService {
         var evaluation = get(evaluationId);
         evaluation.respond(boatmanId, response, now());
         repository.save(evaluation);
-        outbox.append("BOATMAN_RESPONSE_CREATED", evaluationId, Map.of("evaluationId", evaluationId, "boatmanId", boatmanId));
+        outbox.append("BOATMAN_RESPONSE_CREATED", evaluationId, evaluation.isFreight()
+                ? Map.of("evaluationId", evaluationId, "boatmanId", boatmanId, "targetType", TargetType.FREIGHT.name(),
+                        "shipmentId", evaluation.shipmentId())
+                : Map.of("evaluationId", evaluationId, "boatmanId", boatmanId));
     }
 
     @Transactional

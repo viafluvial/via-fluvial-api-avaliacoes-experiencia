@@ -20,7 +20,9 @@ tags:
   - name: Evaluation Moderation
     description: Moderacao e indicadores administrativos.
   - name: Experience Events
-    description: Eventos internos idempotentes do ciclo de viagem.
+    description: Eventos internos idempotentes do ciclo de viagem e do frete entregue.
+  - name: Freight Evaluations
+    description: Avaliacoes de frete (targetType FREIGHT) registradas pela api-fretes-cargas em nome do contratante ou destinatario.
 paths:
   /avaliacoes-experiencia/elegibilidade/viagens/{tripId}:
     get:
@@ -149,7 +151,9 @@ paths:
       tags: [Boatman Experience]
       operationId: getMyBoatmanSummary
       summary: Consultar minha reputacao
-      description: Agrega somente avaliacoes verificadas publicadas do barqueiro autenticado.
+      description: Agrega somente avaliacoes verificadas publicadas do barqueiro autenticado, do tipo informado (padrao TRIP).
+      parameters:
+        - $ref: '#/components/parameters/TargetTypeQuery'
       responses:
         '200':
           description: Resumo de reputacao.
@@ -161,10 +165,11 @@ paths:
       tags: [Boatman Experience]
       operationId: listMyBoatmanEvaluations
       summary: Listar avaliacoes recebidas
-      description: Lista comentarios publicados sem identidade privada do passageiro.
+      description: Lista comentarios publicados sem identidade privada do passageiro, do tipo informado (padrao TRIP).
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/TargetTypeQuery'
       responses:
         '200':
           description: Pagina de avaliacoes publicadas.
@@ -176,7 +181,10 @@ paths:
       tags: [Boatman Experience]
       operationId: getBoatmanSummary
       summary: Consultar reputacao publica
-      description: Retorna agregado sem PII quando houver amostra minima.
+      description: |-
+        Retorna agregado sem PII quando houver amostra minima. `targetType` (padrao TRIP) separa reputacao de viagens
+        e de fretes; avaliacoes FREIGHT nunca entram no agregado TRIP. O resumo FREIGHT inclui `criteria` com as medias
+        de pontualidade, cuidado com a carga e atendimento.
       security: []
       parameters:
         - name: boatmanId
@@ -184,6 +192,7 @@ paths:
           required: true
           description: Identificador do barqueiro.
           schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/TargetTypeQuery'
       responses:
         '200':
           description: Resumo publico.
@@ -238,9 +247,17 @@ paths:
       tags: [Boatman Experience]
       operationId: respondToEvaluation
       summary: Responder avaliacao publicada
-      description: Permite uma resposta do barqueiro relacionado a avaliacao.
+      description: |-
+        Permite uma resposta do barqueiro relacionado a avaliacao (viagem ou frete), somente quando publicada.
+        GESTOR: o barqueiro e o usuario autenticado (comportamento original). SERVICE (ex.: api-fretes-cargas em nome
+        do gestor): o barqueiro e informado em `X-Boatman-Id` (obrigatorio para SERVICE).
       parameters:
         - $ref: '#/components/parameters/EvaluationId'
+        - name: X-Boatman-Id
+          in: header
+          required: false
+          description: Barqueiro em nome de quem a resposta e registrada (obrigatorio quando o chamador e SERVICE).
+          schema: {type: string, format: uuid}
       requestBody:
         required: true
         content:
@@ -252,6 +269,7 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/CommandResponse'}
+        '400': {$ref: '#/components/responses/ProblemResponse'}
         '409': {$ref: '#/components/responses/ProblemResponse'}
   /avaliacoes-experiencia/avaliacoes/{evaluationId}/contestacoes:
     post:
@@ -289,6 +307,11 @@ paths:
           in: query
           description: Nota geral entre 1 e 5.
           schema: {type: integer, minimum: 1, maximum: 5}
+        - name: targetType
+          in: query
+          required: false
+          description: Filtra pelo tipo avaliado; sem filtro lista viagens e fretes.
+          schema: {$ref: '#/components/schemas/TargetType'}
       responses:
         '200':
           description: Pagina de moderacao.
@@ -401,6 +424,96 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/CommandResponse'}
+  /avaliacoes-experiencia/internal/eventos/frete-entregue:
+    post:
+      tags: [Experience Events]
+      operationId: receiveFreightDelivered
+      summary: Receber frete entregue
+      description: |-
+        Evento freight.delivered da api-fretes-cargas (somente SERVICE). Registra a elegibilidade de avaliacao da remessa
+        com janela de 30 dias (expiresAt = deliveredAt + 30 dias). Idempotente por eventId (processed_event): repeticoes
+        respondem 202 EVENT_ALREADY_PROCESSED. Uma remessa mantem a janela do primeiro evento de entrega.
+      x-roles: [SERVICE]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/FreightDeliveredEvent'}
+      responses:
+        '202':
+          description: Evento aceito (EVENT_ACCEPTED) ou ja processado (EVENT_ALREADY_PROCESSED).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommandResponse'}
+        '400': {$ref: '#/components/responses/ProblemResponse'}
+        '403': {$ref: '#/components/responses/ProblemResponse'}
+  /avaliacoes-experiencia/internal/avaliacoes-frete:
+    get:
+      tags: [Freight Evaluations]
+      operationId: listFreightEvaluations
+      summary: Listar avaliacoes de frete
+      description: |-
+        Leitura interna (somente SERVICE, ex.: api-fretes-cargas espelhando a moderacao) das avaliacoes de frete
+        (targetType FREIGHT), em qualquer estado de moderacao, ordenadas da mais recente para a mais antiga
+        (createdAt desc, id desc). Avaliacoes de viagem (TRIP) nunca sao retornadas. Filtros opcionais por barqueiro
+        (`boatmanId`) e estado de moderacao (`status`). `boatmanId` fora do formato UUID, `status` desconhecido,
+        `page` negativa ou `size` fora de 1..100 respondem 400.
+      x-roles: [SERVICE]
+      parameters:
+        - name: boatmanId
+          in: query
+          required: false
+          description: Filtra pelo barqueiro (transportador) avaliado.
+          schema: {type: string, format: uuid}
+        - name: status
+          in: query
+          required: false
+          description: Filtra pelo estado de moderacao atual.
+          schema: {$ref: '#/components/schemas/EvaluationStatus'}
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Pagina de avaliacoes de frete.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FreightEvaluationPage'}
+        '400': {$ref: '#/components/responses/ProblemResponse'}
+        '403': {$ref: '#/components/responses/ProblemResponse'}
+    post:
+      tags: [Freight Evaluations]
+      operationId: createFreightEvaluation
+      summary: Registrar avaliacao de frete
+      description: |-
+        Chamado pela api-fretes-cargas (somente SERVICE) em nome do contratante ou do destinatario de uma remessa entregue.
+        Valida a elegibilidade registrada por frete-entregue: remessa entregue (422 SHIPMENT_NOT_DELIVERED), ate 30 dias
+        (422 EVALUATION_WINDOW_EXPIRED), barqueiro da remessa (422 BOATMAN_MISMATCH), avaliador conforme raterRole
+        (422 NOT_PARTICIPANT) e uma avaliacao por remessa e pessoa (409 ALREADY_EVALUATED). A mesma idempotencyKey
+        (corpo ou cabecalho Idempotency-Key) devolve a mesma avaliacao; reutiliza-la para outra remessa responde
+        409 IDEMPOTENCY_KEY_REUSED. A nota geral (scores.overall) e a media das tres notas arredondada (meio para cima).
+        A avaliacao segue o fluxo de moderacao existente (SUBMITTED/UNDER_REVIEW ate aprovacao).
+      x-roles: [SERVICE]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateFreightEvaluationRequest'}
+      responses:
+        '201':
+          description: Avaliacao de frete registrada (ou devolvida pela mesma chave de idempotencia).
+          headers:
+            Location: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EvaluationResponse'}
+        '400': {$ref: '#/components/responses/ProblemResponse'}
+        '403': {$ref: '#/components/responses/ProblemResponse'}
+        '409': {$ref: '#/components/responses/ProblemResponse'}
+        '422': {$ref: '#/components/responses/ProblemResponse'}
 components:
   securitySchemes:
     bearerAuth:
@@ -436,6 +549,14 @@ components:
       in: query
       description: Quantidade por pagina.
       schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+    TargetTypeQuery:
+      name: targetType
+      in: query
+      required: false
+      description: Tipo avaliado (TRIP viagem, FREIGHT frete). Padrao TRIP, que preserva o comportamento original.
+      schema:
+        $ref: '#/components/schemas/TargetType'
+        default: TRIP
   responses:
     ProblemResponse:
       description: Erro no formato RFC 7807.
@@ -447,6 +568,57 @@ components:
       type: string
       description: Estado auditavel da avaliacao.
       enum: [SUBMITTED, UNDER_REVIEW, PUBLISHED, REJECTED, CONTESTED, ANONYMIZED]
+    TargetType:
+      type: string
+      description: Tipo avaliado. TRIP (viagem, padrao) ou FREIGHT (frete entregue).
+      enum: [TRIP, FREIGHT]
+    RaterRole:
+      type: string
+      description: Participacao do avaliador na remessa.
+      enum: [CONTRATANTE, DESTINATARIO]
+    FreightScores:
+      type: object
+      description: Notas do frete (1 a 5).
+      required: [punctuality, cargoCare, service]
+      properties:
+        punctuality: {type: integer, minimum: 1, maximum: 5, description: Pontualidade, example: 5}
+        cargoCare: {type: integer, minimum: 1, maximum: 5, description: Cuidado com a carga, example: 4}
+        service: {type: integer, minimum: 1, maximum: 5, description: Atendimento, example: 5}
+    FreightCriteriaAverages:
+      type: object
+      description: Medias dos criterios do frete nas avaliacoes FREIGHT publicadas (nulas sem avaliacoes).
+      properties:
+        punctuality: {type: number, format: double, minimum: 1, maximum: 5}
+        cargoCare: {type: number, format: double, minimum: 1, maximum: 5}
+        service: {type: number, format: double, minimum: 1, maximum: 5}
+    FreightDeliveredEvent:
+      type: object
+      required: [eventId, shipmentId, boatmanId, contractorUserId, deliveredAt]
+      properties:
+        eventId: {type: string, format: uuid, description: Identificador idempotente do evento.}
+        shipmentId: {type: string, format: uuid, description: Remessa entregue.}
+        boatmanId: {type: string, format: uuid, description: Barqueiro (transportador) da remessa.}
+        contractorUserId: {type: string, format: uuid, description: Usuario contratante.}
+        recipientUserId: {type: string, format: uuid, description: Usuario destinatario (quando cadastrado).}
+        deliveredAt: {type: string, format: date-time, description: Instante da entrega.}
+    CreateFreightEvaluationRequest:
+      type: object
+      required: [shipmentId, boatmanId, raterUserId, raterRole, punctuality, cargoCare, service]
+      properties:
+        shipmentId: {type: string, format: uuid, description: Remessa entregue.}
+        boatmanId: {type: string, format: uuid, description: Barqueiro avaliado; deve ser o da remessa.}
+        raterUserId: {type: string, format: uuid, description: Usuario avaliador (contratante ou destinatario).}
+        raterRole: {$ref: '#/components/schemas/RaterRole'}
+        punctuality: {type: integer, minimum: 1, maximum: 5, description: Pontualidade.}
+        cargoCare: {type: integer, minimum: 1, maximum: 5, description: Cuidado com a carga.}
+        service: {type: integer, minimum: 1, maximum: 5, description: Atendimento.}
+        tags:
+          type: array
+          maxItems: 10
+          description: Codigos rapidos (duplicados sao ignorados).
+          items: {type: string, pattern: '^[A-Z0-9_]{2,40}$'}
+        comment: {type: string, maxLength: 1000, description: Comentario publico sem dados pessoais.}
+        idempotencyKey: {type: string, minLength: 1, maxLength: 100, description: Chave de idempotencia da avaliacao.}
     ManifestationType:
       type: string
       description: Natureza declarada do feedback.
@@ -502,10 +674,20 @@ components:
         ticketId: {type: string, format: uuid, description: Bilhete usado como evidencia de embarque.}
     EvaluationResponse:
       type: object
-      required: [id, tripId, scores, manifestationType, status, verifiedTrip, anonymousPublicDisplay, createdAt, updatedAt]
+      required: [id, scores, manifestationType, status, verifiedTrip, anonymousPublicDisplay, createdAt, updatedAt]
       properties:
         id: {type: string, format: uuid, description: Identificador da avaliacao.}
-        tripId: {type: string, format: uuid, description: Viagem avaliada.}
+        targetType: {$ref: '#/components/schemas/TargetType'}
+        tripId: {type: string, format: uuid, description: Viagem avaliada. Sempre presente quando targetType e TRIP; nulo para FREIGHT.}
+        shipmentId:
+          type: string
+          format: uuid
+          description: Remessa avaliada (somente FREIGHT).
+          x-field-extra-annotation: '@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)'
+        freightScores:
+          description: Notas do frete (somente FREIGHT).
+          $ref: '#/components/schemas/FreightScores'
+          x-field-extra-annotation: '@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)'
         boatmanId: {type: string, format: uuid, description: Barqueiro resolvido da viagem.}
         vesselId: {type: string, format: uuid, description: Embarcacao resolvida da viagem.}
         routeId: {type: string, format: uuid, description: Rota resolvida da viagem.}
@@ -515,7 +697,7 @@ components:
         comment: {type: string, description: Comentario sanitizado conforme visibilidade.}
         tags: {type: array, items: {type: string}}
         status: {$ref: '#/components/schemas/EvaluationStatus'}
-        verifiedTrip: {type: boolean, description: Evidencia de participacao confirmada.}
+        verifiedTrip: {type: boolean, description: Evidencia de participacao confirmada (embarque na viagem ou entrega do frete).}
         anonymousPublicDisplay: {type: boolean, description: Preferencia de exibicao publica.}
         boatmanResponse: {type: string, description: Resposta publica do barqueiro.}
         moderationReason: {type: string, description: Motivo visivel ao ator autorizado.}
@@ -526,6 +708,34 @@ components:
       required: [items, page, size, totalElements, totalPages]
       properties:
         items: {type: array, items: {$ref: '#/components/schemas/EvaluationResponse'}}
+        page: {type: integer, minimum: 0}
+        size: {type: integer, minimum: 1}
+        totalElements: {type: integer, format: int64, minimum: 0}
+        totalPages: {type: integer, minimum: 0}
+    FreightEvaluationItem:
+      type: object
+      description: Avaliacao de frete para leitura interna (SERVICE), com estado de moderacao e resposta do transportador.
+      required: [id, targetType, shipmentId, boatmanId, rating, freightScores, status, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid, description: Identificador da avaliacao.}
+        targetType: {$ref: '#/components/schemas/TargetType'}
+        shipmentId: {type: string, format: uuid, description: Remessa avaliada.}
+        boatmanId: {type: string, format: uuid, description: Barqueiro (transportador) avaliado.}
+        raterUserId: {type: string, format: uuid, description: Usuario avaliador (contratante ou destinatario); nulo apos anonimizacao.}
+        rating: {type: integer, minimum: 1, maximum: 5, description: Nota geral (media das tres notas arredondada meio para cima).}
+        freightScores: {$ref: '#/components/schemas/FreightScores'}
+        comment: {type: string, description: Comentario da avaliacao.}
+        tags: {type: array, items: {type: string}, description: Codigos rapidos escolhidos.}
+        status: {$ref: '#/components/schemas/EvaluationStatus'}
+        moderationReason: {type: string, description: Motivo registrado na ultima decisao de moderacao (quando houver).}
+        boatmanResponse: {type: string, description: Resposta publica do transportador (quando houver).}
+        createdAt: {type: string, format: date-time, description: Instante de criacao.}
+        updatedAt: {type: string, format: date-time, description: Ultima alteracao (moderacao, resposta ou contestacao).}
+    FreightEvaluationPage:
+      type: object
+      required: [items, page, size, totalElements, totalPages]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/FreightEvaluationItem'}}
         page: {type: integer, minimum: 0}
         size: {type: integer, minimum: 1}
         totalElements: {type: integer, format: int64, minimum: 0}
@@ -568,6 +778,12 @@ components:
       type: object
       required: [averageRating, verifiedEvaluationCount, distribution, sampleSufficient]
       properties:
+        targetType:
+          $ref: '#/components/schemas/TargetType'
+        criteria:
+          description: Medias por criterio (somente resumo FREIGHT).
+          $ref: '#/components/schemas/FreightCriteriaAverages'
+          x-field-extra-annotation: '@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)'
         averageRating: {type: number, format: double, minimum: 0, maximum: 5, description: Media geral publicada.}
         verifiedEvaluationCount: {type: integer, format: int64, minimum: 0, description: Total verificado publicado.}
         nps: {type: number, format: double, minimum: -100, maximum: 100, description: Net Promoter Score.}

@@ -9,6 +9,8 @@ import java.util.UUID;
 public final class ExperienceEvaluation {
 
     private final UUID id;
+    private final TargetType targetType;
+    private final UUID shipmentId;
     private final UUID tripId;
     private UUID passengerId;
     private final UUID bookingId;
@@ -17,6 +19,7 @@ public final class ExperienceEvaluation {
     private final UUID vesselId;
     private final UUID routeId;
     private EvaluationScores scores;
+    private final FreightScores freightScores;
     private NpsScore npsScore;
     private ManifestationType manifestationType;
     private String comment;
@@ -30,18 +33,31 @@ public final class ExperienceEvaluation {
     private final OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 
-    private ExperienceEvaluation(UUID id, UUID tripId, UUID passengerId, UUID bookingId, UUID ticketId,
-            UUID boatmanId, UUID vesselId, UUID routeId, EvaluationScores scores, NpsScore npsScore,
+    private ExperienceEvaluation(UUID id, TargetType targetType, UUID shipmentId, UUID tripId, UUID passengerId,
+            UUID bookingId, UUID ticketId, UUID boatmanId, UUID vesselId, UUID routeId, EvaluationScores scores,
+            FreightScores freightScores, NpsScore npsScore,
             ManifestationType manifestationType, String comment, List<String> tags, EvaluationStatus status,
             boolean anonymousPublicDisplay, String boatmanResponse, String moderationReason,
             String idempotencyKey, OffsetDateTime eligibleUntil, OffsetDateTime createdAt, OffsetDateTime updatedAt) {
         this.id = Objects.requireNonNull(id);
-        this.tripId = Objects.requireNonNull(tripId);
+        this.targetType = TargetType.orDefault(targetType);
+        if (this.targetType == TargetType.TRIP) {
+            this.tripId = Objects.requireNonNull(tripId);
+            this.bookingId = Objects.requireNonNull(bookingId);
+            this.ticketId = Objects.requireNonNull(ticketId);
+            this.vesselId = Objects.requireNonNull(vesselId);
+            this.shipmentId = null;
+            this.freightScores = null;
+        } else {
+            this.shipmentId = Objects.requireNonNull(shipmentId);
+            this.freightScores = Objects.requireNonNull(freightScores);
+            this.tripId = null;
+            this.bookingId = null;
+            this.ticketId = null;
+            this.vesselId = vesselId;
+        }
         this.passengerId = passengerId;
-        this.bookingId = Objects.requireNonNull(bookingId);
-        this.ticketId = Objects.requireNonNull(ticketId);
         this.boatmanId = Objects.requireNonNull(boatmanId);
-        this.vesselId = Objects.requireNonNull(vesselId);
         this.routeId = routeId;
         this.scores = Objects.requireNonNull(scores);
         this.npsScore = npsScore;
@@ -67,10 +83,33 @@ public final class ExperienceEvaluation {
         EvaluationStatus initialStatus = requiresReview(manifestationType, comment)
                 ? EvaluationStatus.UNDER_REVIEW
                 : EvaluationStatus.SUBMITTED;
-        return new ExperienceEvaluation(UUID.randomUUID(), evidence.tripId(), evidence.passengerId(),
-                evidence.bookingId(), evidence.ticketId(), evidence.boatmanId(), evidence.vesselId(),
-                evidence.routeId(), scores, npsScore, manifestationType, comment, tags, initialStatus,
-                anonymousPublicDisplay, null, null, idempotencyKey, evidence.eligibleUntil(), now, now);
+        return new ExperienceEvaluation(UUID.randomUUID(), TargetType.TRIP, null, evidence.tripId(),
+                evidence.passengerId(), evidence.bookingId(), evidence.ticketId(), evidence.boatmanId(),
+                evidence.vesselId(), evidence.routeId(), scores, null, npsScore, manifestationType, comment, tags,
+                initialStatus, anonymousPublicDisplay, null, null, idempotencyKey, evidence.eligibleUntil(), now, now);
+    }
+
+    /**
+     * Freight evaluation made on behalf of the contractor or recipient of a delivered shipment. The rater is
+     * stored as passengerId (owner), the overall score is derived from the three criteria and the public
+     * display is always anonymous (no full name is ever exposed).
+     */
+    public static ExperienceEvaluation submitFreight(FreightEligibility eligibility, UUID raterUserId,
+            FreightScores freightScores, String comment, List<String> tags, String idempotencyKey,
+            OffsetDateTime now) {
+        Objects.requireNonNull(raterUserId, "raterUserId is required");
+        if (!eligibility.isOpenAt(now)) {
+            throw new EvaluationConflictException("Evaluation window has expired");
+        }
+        ManifestationType manifestationType = freightScores.manifestationType();
+        EvaluationStatus initialStatus = requiresReview(manifestationType, comment)
+                ? EvaluationStatus.UNDER_REVIEW
+                : EvaluationStatus.SUBMITTED;
+        var scores = new EvaluationScores(freightScores.overall(), null, null, null, null, null, null);
+        return new ExperienceEvaluation(UUID.randomUUID(), TargetType.FREIGHT, eligibility.shipmentId(), null,
+                raterUserId, null, null, eligibility.boatmanId(), null, null, scores, freightScores, null,
+                manifestationType, comment, tags, initialStatus, true, null, null, idempotencyKey,
+                eligibility.expiresAt(), now, now);
     }
 
     public static ExperienceEvaluation restore(UUID id, UUID tripId, UUID passengerId, UUID bookingId,
@@ -79,13 +118,28 @@ public final class ExperienceEvaluation {
             EvaluationStatus status, boolean anonymousPublicDisplay, String boatmanResponse,
             String moderationReason, String idempotencyKey, OffsetDateTime eligibleUntil, OffsetDateTime createdAt,
             OffsetDateTime updatedAt) {
-        return new ExperienceEvaluation(id, tripId, passengerId, bookingId, ticketId, boatmanId, vesselId,
-                routeId, scores, npsScore, manifestationType, comment, tags, status,
-                anonymousPublicDisplay, boatmanResponse, moderationReason, idempotencyKey, eligibleUntil, createdAt, updatedAt);
+        return restore(id, TargetType.TRIP, null, tripId, passengerId, bookingId, ticketId, boatmanId, vesselId,
+                routeId, scores, null, npsScore, manifestationType, comment, tags, status, anonymousPublicDisplay,
+                boatmanResponse, moderationReason, idempotencyKey, eligibleUntil, createdAt, updatedAt);
+    }
+
+    public static ExperienceEvaluation restore(UUID id, TargetType targetType, UUID shipmentId, UUID tripId,
+            UUID passengerId, UUID bookingId, UUID ticketId, UUID boatmanId, UUID vesselId, UUID routeId,
+            EvaluationScores scores, FreightScores freightScores, NpsScore npsScore,
+            ManifestationType manifestationType, String comment, List<String> tags, EvaluationStatus status,
+            boolean anonymousPublicDisplay, String boatmanResponse, String moderationReason, String idempotencyKey,
+            OffsetDateTime eligibleUntil, OffsetDateTime createdAt, OffsetDateTime updatedAt) {
+        return new ExperienceEvaluation(id, targetType, shipmentId, tripId, passengerId, bookingId, ticketId,
+                boatmanId, vesselId, routeId, scores, freightScores, npsScore, manifestationType, comment, tags,
+                status, anonymousPublicDisplay, boatmanResponse, moderationReason, idempotencyKey, eligibleUntil,
+                createdAt, updatedAt);
     }
 
     public void update(EvaluationScores scores, NpsScore npsScore, ManifestationType manifestationType,
             String comment, List<String> tags, Boolean anonymousPublicDisplay, OffsetDateTime now) {
+        if (targetType != TargetType.TRIP) {
+            throw new EvaluationConflictException("Freight evaluations cannot be edited through this operation");
+        }
         if (status != EvaluationStatus.SUBMITTED && status != EvaluationStatus.UNDER_REVIEW) {
             throw new EvaluationConflictException("Evaluation can no longer be edited");
         }
@@ -185,6 +239,10 @@ public final class ExperienceEvaluation {
     }
 
     public UUID id() { return id; }
+    public TargetType targetType() { return targetType; }
+    public boolean isFreight() { return targetType == TargetType.FREIGHT; }
+    public UUID shipmentId() { return shipmentId; }
+    public FreightScores freightScores() { return freightScores; }
     public UUID tripId() { return tripId; }
     public UUID passengerId() { return passengerId; }
     public UUID bookingId() { return bookingId; }

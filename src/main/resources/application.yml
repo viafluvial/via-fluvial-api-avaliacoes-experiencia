@@ -39,6 +39,19 @@ management:
       probes:
         enabled: true
       show-details: when_authorized
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+      # Chave do projeto no Coroot (header exigido pela ingestao OTLP); vazia fora de producao.
+      headers:
+        x-api-key: ${COROOT_API_KEY:}
+
+# Spans SQL (datasource-micrometer): somente consultas, sem valores de parametros.
+jdbc:
+  includes: QUERY
+  datasource-proxy:
+    include-parameter-values: false
+
 springdoc:
   api-docs:
     path: /v3/api-docs
@@ -51,6 +64,8 @@ springdoc:
     urls-primary-name: OpenAPI (runtime - JSON)
 evaluation:
   window-days: ${EVALUATION_WINDOW_DAYS:30}
+  # Janela de avaliacao do frete entregue (contrato: 30 dias apos deliveredAt).
+  freight-window-days: ${FREIGHT_EVALUATION_WINDOW_DAYS:30}
 integrations:
   service-token: ${INTEGRATIONS_SERVICE_TOKEN:}
   outbox:
